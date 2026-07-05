@@ -83,6 +83,11 @@ class Settings(BaseSettings):
     enable_intent_detection: bool = False
     enable_query_rewrite: bool = False
 
+    # Diversitaets-Cap fuer apply_score_heuristic() (rag/retrieval.py): maximale
+    # Anzahl Chunks pro source_id, die per Round-Robin garantiert werden, bevor
+    # der Rest des CONTEXT_TOP_K-Budgets rein nach Score aufgefuellt wird.
+    context_max_chunks_per_source: int = 4
+
     # Token-Budget fuer die finale Sonnet-Antwort (chat/service.py answer_question).
     # Bei stop_reason="max_tokens" wird einmalig mit dem doppelten Budget retried
     # (siehe langdock/client.py ResponseTruncatedError).

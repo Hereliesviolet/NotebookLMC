@@ -17,10 +17,16 @@ from app.langdock.prompts_loader import load_final_answer_tool, load_prompt
 from app.rag import query_understanding
 from app.rag.citation_validation import downgrade_confidence_if_unsupported, validate_citations
 from app.rag.context_assembly import build_context_block, fetch_chunk_texts
-from app.rag.retrieval import RetrievedChunk, apply_score_heuristic, search_notebook
+from app.rag.retrieval import RetrievedChunk, apply_score_heuristic, backfill_missing_sources, search_notebook
 from app.schemas.chat import ChatRequest, ChatResponse
 
 logger = get_logger(__name__)
+
+# Notebook-Overview-artige Intents (siehe haiku_intent_detection.md): fuer diese
+# Fragen wird der Diversitaets-Cap in apply_score_heuristic() auf 1 verschaerft,
+# damit moeglichst jede Quelle im Notebook einen Slot bekommt statt nur die
+# thematisch am naechsten liegende(n) Quelle(n).
+OVERVIEW_INTENTS = {"summary", "briefing"}
 
 
 async def answer_question(
@@ -32,6 +38,7 @@ async def answer_question(
     db.add(models.Message(notebook_id=notebook_id, user_id=user_id, role="user", content=payload.message))
     await db.commit()
 
+    intent = None
     search_queries = [payload.message]
     if settings.enable_intent_detection:
         intent = query_understanding.detect_intent(client, payload.message)
@@ -40,12 +47,23 @@ async def answer_question(
         search_queries = query_understanding.rewrite_query(client, payload.message)
 
     retrieved_by_id: dict[str, RetrievedChunk] = {}
+    primary_embedding: list[float] | None = None
     try:
         for query in search_queries:
             embedding = client.embed([query])
             if not embedding.vectors:
                 continue
+            if primary_embedding is None:
+                primary_embedding = embedding.vectors[0]
             for chunk in search_notebook(notebook_id, embedding.vectors[0], source_ids=payload.source_ids):
+                existing = retrieved_by_id.get(chunk.chunk_id)
+                if existing is None or chunk.score > existing.score:
+                    retrieved_by_id[chunk.chunk_id] = chunk
+
+        if primary_embedding is not None:
+            for chunk in backfill_missing_sources(
+                notebook_id, primary_embedding, list(retrieved_by_id.values()), source_ids=payload.source_ids
+            ):
                 existing = retrieved_by_id.get(chunk.chunk_id)
                 if existing is None or chunk.score > existing.score:
                     retrieved_by_id[chunk.chunk_id] = chunk
@@ -61,7 +79,8 @@ async def answer_question(
         await _persist_assistant_message(db, notebook_id, user_id, response, model=None)
         return response
 
-    top_chunks = apply_score_heuristic(list(retrieved_by_id.values()))
+    max_chunks_per_source = 1 if intent in OVERVIEW_INTENTS else None
+    top_chunks = apply_score_heuristic(list(retrieved_by_id.values()), max_chunks_per_source=max_chunks_per_source)
 
     if not top_chunks:
         response = ChatResponse(
