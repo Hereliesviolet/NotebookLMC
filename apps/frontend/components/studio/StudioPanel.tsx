@@ -62,26 +62,29 @@ export function StudioPanel({ notebookId }: { notebookId: string }) {
       <p className="text-xs text-muted-foreground">
         Zusammenfassungen, FAQ, Timeline und Briefings aus deinen Quellen generieren.
       </p>
-      <div className="grid grid-cols-2 gap-3">
+
+      <div className="flex flex-col gap-2">
         {STUDIO_FEATURES.map(({ type, icon: Icon, title, description }) => {
           const status = statuses[type];
           return (
             <Card
               key={type}
               onClick={() => setActiveType(type)}
-              className="flex cursor-pointer flex-col gap-1.5 p-3 transition-shadow hover:shadow-md"
+              className="flex cursor-pointer flex-row items-center gap-3 p-3 transition-shadow hover:shadow-md"
             >
-              <Icon className="h-5 w-5 text-primary" />
-              <p className="text-sm font-semibold text-foreground">{title}</p>
-              <p className="text-xs leading-snug text-muted-foreground">{description}</p>
-              <p
-                className={cn(
-                  "mt-1 text-[11px] font-medium",
-                  status ? "text-emerald-600" : "text-muted-foreground"
-                )}
-              >
-                {statusLabel(status)}
-              </p>
+              <Icon className="h-5 w-5 shrink-0 text-primary" />
+              <div className="flex flex-col gap-0.5">
+                <p className="text-sm font-semibold text-foreground">{title}</p>
+                <p className="text-xs leading-snug text-muted-foreground">{description}</p>
+                <p
+                  className={cn(
+                    "mt-0.5 text-[11px] font-medium",
+                    status ? "text-emerald-600" : "text-muted-foreground"
+                  )}
+                >
+                  {statusLabel(status)}
+                </p>
+              </div>
             </Card>
           );
         })}
