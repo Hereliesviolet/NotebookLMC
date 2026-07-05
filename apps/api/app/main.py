@@ -7,6 +7,7 @@ from app.auth.router import router as auth_router
 from app.chat.router import router as chat_router
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
+from app.core.middleware import PrivateNetworkAccessMiddleware
 from app.notebooks.router import router as notebooks_router
 from app.notes.router import router as notes_router
 from app.qdrant.client import ensure_collection
@@ -41,6 +42,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# Added after CORSMiddleware so it wraps it (outermost user middleware) and
+# can amend its preflight response with the Private Network Access header.
+app.add_middleware(PrivateNetworkAccessMiddleware)
 
 app.include_router(auth_router)
 app.include_router(notebooks_router)
