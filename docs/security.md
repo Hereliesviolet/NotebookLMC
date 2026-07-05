@@ -31,6 +31,28 @@ Austauschstelle ist bewusst klein gehalten:
 in einer zukünftigen Auth-Implementierung den Dev-Login-Pfad hart abschalten
 zu können.
 
+## Netzwerk-Exposition
+
+- Von den Compose-Services darf **nur `caddy`** (Ports 80/443) öffentlich
+  erreichbar sein. `frontend`, `api`, `postgres`, `redis`, `qdrant` und
+  `minio` binden ihre Host-Port-Mappings in `docker-compose.yml` standardmäßig
+  an `${BIND_ADDRESS:-127.0.0.1}` statt an `0.0.0.0` - sie sind also nur vom
+  Host selbst (z. B. per SSH-Tunnel) erreichbar, nicht über die öffentliche
+  Netzwerkschnittstelle. `caddy` routet intern über das Docker-Netzwerk
+  (`api:8000`, `frontend:3000`, siehe `infra/caddy/Caddyfile`) und braucht
+  dafür keine Host-Port-Mappings der Zielservices.
+- Für lokale Entwicklung, bei der direkter externer Zugriff auf einen
+  einzelnen Service nötig ist, kann `BIND_ADDRESS=0.0.0.0` in `.env` gesetzt
+  werden (siehe `.env.example`). **Für Produktivbetrieb auf einem öffentlich
+  erreichbaren Host darf `BIND_ADDRESS` niemals auf `0.0.0.0` gesetzt werden**
+  - das exponiert API/Datenbank/Cache/Vektorstore/Objektspeicher ohne
+  Auth-Schutz direkt im Internet.
+- Hintergrund: Ein direkt exponierter Port ist ein reales Angriffsziel -
+  automatisierte Scanner senden dauerhaft generische Exploit-Payloads
+  (WordPress-Pfade, Path-Traversal, XSS, Kubernetes-API-Pfade usw.) gegen
+  jeden offenen Port, unabhängig davon, welche Anwendung tatsächlich dahinter
+  läuft.
+
 ## Transport-Sicherheit
 
 - Lokal terminiert Caddy HTTP ohne Zertifikat (`infra/caddy/Caddyfile`,

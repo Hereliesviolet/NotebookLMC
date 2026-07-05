@@ -29,6 +29,51 @@ Datei aktivieren - Caddy übernimmt dann automatisch die HTTPS-Zertifikate
 via ACME/Let's Encrypt. Es sind keine weiteren Anpassungen an Frontend/API
 nötig, solange `/api` als Präfix erreichbar bleibt.
 
+## Deployment mit geteiltem Caddy (Multi-Projekt-Host)
+
+Auf einem Host, auf dem Port 80/443 bereits von einem anderen, unabhängigen
+Caddy-Container belegt sind (z. B. ein gemeinsam genutzter Caddy für mehrere
+Projekte), kann NotebookLMC diesen bestehenden Caddy mitbenutzen, statt den
+eigenen `caddy`-Service zu starten:
+
+```bash
+docker compose stop caddy   # eigener caddy-Service bleibt ungestartet
+docker compose -f docker-compose.yml -f docker-compose.shared-caddy.yml \
+  up -d --no-deps api frontend
+```
+
+`docker-compose.shared-caddy.yml` hängt `api` und `frontend` zusätzlich in
+das externe Docker-Netzwerk des bereits laufenden, gemeinsamen Caddy
+(`shared_caddy_net`, Default-Name `fremdes-projekt-a_caddy-network` - **muss** auf den
+tatsächlichen Netzwerknamen des jeweiligen Hosts angepasst werden, siehe
+Kommentar in der Datei). Im Caddyfile des gemeinsamen Caddy muss dafür
+manuell ein zusätzlicher Site-Block ergänzt werden, der `/api/*` an `api:8000`
+und alles andere an `frontend:3000` weiterleitet (Vorlage: `infra/caddy/Caddyfile`
+in diesem Repo, Routing-Prinzip 1:1 übernehmen).
+
+**Platzhalter-Domain ersetzen:** Solange keine echte Domain vorhanden ist,
+kann im Site-Block des gemeinsamen Caddy vorübergehend eine Platzhalter-Domain
+verwendet werden (z. B. `notebooklmc.example.com`). Da `example.com` von der
+Let's-Encrypt-ACME-Policy für Zertifikate geblockt ist, muss ein solcher
+Platzhalter-Block per `http://`-Präfix (`http://notebooklmc.example.com { ... }`)
+explizit ohne automatisches HTTPS betrieben werden. Sobald die echte Domain
+feststeht: DNS-A-Record (und ggf. AAAA) auf diesen Server zeigen lassen, den
+`http://`-Präfix entfernen und den Site-Block auf die echte Domain ändern -
+Caddy bezieht dann automatisch ein Let's-Encrypt-Zertifikat.
+
+**Wichtiger Next.js-Fallstrick bei mehreren Netzwerken:** Der
+Next.js-Standalone-Server (`apps/frontend/Dockerfile` → `server.js`) bindet
+standardmäßig an die per Docker-DNS aufgelöste `HOSTNAME`-IP statt an
+`0.0.0.0`. Sobald `frontend` (wie hier) in zwei Docker-Netzwerken hängt, kann
+diese Auflösung auf die falsche Netzwerk-IP zeigen und der Server ist über
+das andere Netzwerk nicht mehr erreichbar. `docker-compose.shared-caddy.yml`
+setzt deshalb explizit `HOSTNAME=0.0.0.0` für `frontend`.
+
+Der eigene `caddy`-Service in `docker-compose.yml` bleibt für Hosts erhalten,
+auf denen Port 80/443 frei sind (Standardfall, z. B. ein dedizierter Server
+nur für NotebookLMC) - dort einfach `docker compose up -d` ohne die
+Zusatz-Datei verwenden.
+
 ## Frontend-Build-Variable
 
 `NEXT_PUBLIC_API_URL` wird von Next.js **zur Build-Zeit** in das JS-Bundle
