@@ -1,75 +1,37 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import { Download } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { fetchStudioInfographicImage } from "@/lib/api-client";
 import type { StudioInfographicContent } from "@/lib/types";
 
-interface StudioInfographicViewProps {
-  notebookId: string;
-  content: StudioInfographicContent;
-  refreshKey: number;
-}
-
-export function StudioInfographicView({ notebookId, content, refreshKey }: StudioInfographicViewProps) {
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    let objectUrl: string | null = null;
-    setLoading(true);
-    setError(null);
-    fetchStudioInfographicImage(notebookId, refreshKey)
-      .then((blob) => {
-        if (cancelled) return;
-        objectUrl = URL.createObjectURL(blob);
-        setImageUrl(objectUrl);
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Grafik konnte nicht geladen werden.");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [notebookId, refreshKey]);
-
-  function handleDownload() {
-    if (!imageUrl) return;
-    const link = document.createElement("a");
-    link.href = imageUrl;
-    link.download = "infografik.png";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  }
-
+export function StudioInfographicView({ content }: { content: StudioInfographicContent }) {
   return (
-    <div className="mx-auto flex max-w-2xl flex-col items-center gap-4">
-      <div className="text-center">
-        <p className="text-lg font-semibold text-foreground">{content.headline}</p>
-        <p className="text-sm text-muted-foreground">{content.subheadline}</p>
+    <div className="flex flex-col gap-4">
+      <div className="rounded-lg bg-primary px-6 py-6 text-primary-foreground">
+        <h1 className="text-2xl font-bold">{content.headline}</h1>
+        <p className="mt-1.5 text-sm text-primary-foreground/85">{content.subheadline}</p>
       </div>
 
-      {loading && <p className="text-sm text-muted-foreground">Grafik wird geladen…</p>}
-      {!loading && error && <p className="text-sm text-red-600">{error}</p>}
-
-      {!loading && imageUrl && (
-        <>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={imageUrl} alt={content.headline} className="max-w-full rounded-md border border-border shadow-sm" />
-          <Button variant="outline" size="sm" onClick={handleDownload}>
-            <Download className="h-3.5 w-3.5" />
-            PNG herunterladen
-          </Button>
-        </>
+      {content.stats.length > 0 && (
+        <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${content.stats.length}, minmax(0, 1fr))` }}>
+          {content.stats.map((stat, index) => (
+            <div key={index} className="rounded-md border border-border bg-primary/10 px-3 py-3 text-center">
+              <div className="text-xl font-bold text-primary">{stat.value}</div>
+              <div className="mt-0.5 text-xs text-muted-foreground">{stat.label}</div>
+            </div>
+          ))}
+        </div>
       )}
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        {content.sections.map((section, index) => (
+          <div key={index} className="rounded-md border border-border p-4">
+            <div className="mb-1.5 flex items-center gap-2">
+              <span className="flex h-[18px] w-[18px] flex-none items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
+                {index + 1}
+              </span>
+              <h3 className="text-sm font-bold text-primary">{section.title}</h3>
+            </div>
+            <p className="text-sm text-foreground">{section.body}</p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

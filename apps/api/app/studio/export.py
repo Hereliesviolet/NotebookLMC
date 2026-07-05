@@ -41,6 +41,7 @@ ARTIFACT_TITLES = {
     "faq": "Häufig gestellte Fragen (FAQ)",
     "timeline": "Timeline",
     "briefing": "Briefing",
+    "infographic": "Infografik",
 }
 
 _BRIEFING_SECTIONS = [
@@ -310,7 +311,7 @@ def _add_title(document, artifact_type: str, notebook_title: str, generated_at: 
     _add_meta_badge(document, f"Generiert am {generated_at.strftime('%d.%m.%Y %H:%M')} Uhr")
 
 
-def _setup_page(document, notebook_title: str) -> None:
+def _setup_page(document, notebook_title: str, include_header_footer: bool = True) -> None:
     section = document.sections[0]
     section.page_width = Mm(210)
     section.page_height = Mm(297)
@@ -319,6 +320,9 @@ def _setup_page(document, notebook_title: str) -> None:
     section.top_margin = Cm(1.8)
     section.bottom_margin = Cm(1.8)
     usable_width = section.page_width - section.left_margin - section.right_margin
+
+    if not include_header_footer:
+        return
 
     header_paragraph = section.header.paragraphs[0]
     run = header_paragraph.add_run(f"NotebookLM Clone · {notebook_title}")
@@ -530,10 +534,64 @@ def _briefing_to_docx(document, content: dict) -> None:
         document.add_paragraph().paragraph_format.space_after = Pt(2)
 
 
+def _infographic_to_docx(document, content: dict) -> None:
+    """Simple text fallback for the poster layout (a CSS-grid poster isn't
+    reproducible in Word) - headline/subheadline as a plain title, stats as
+    a compact line, sections as a numbered list with bold titles.
+    """
+    headline = document.add_heading(content.get("headline", ""), level=0)
+    for run in headline.runs:
+        run.font.color.rgb = RGBColor.from_string(PRIMARY.lstrip("#"))
+    headline.paragraph_format.space_after = Pt(2)
+
+    subheadline = content.get("subheadline")
+    if subheadline:
+        sub_paragraph = document.add_paragraph()
+        sub_run = sub_paragraph.add_run(subheadline)
+        sub_run.italic = True
+        sub_run.font.color.rgb = RGBColor.from_string(MUTED.lstrip("#"))
+    document.add_paragraph().paragraph_format.space_after = Pt(4)
+
+    stats = content.get("stats") or []
+    if stats:
+        stats_paragraph = document.add_paragraph()
+        _set_paragraph_box(stats_paragraph, fill_hex=PRIMARY_TINT, border_hex=BORDER, size=4, space=8)
+        for index, stat in enumerate(stats):
+            if index > 0:
+                sep_run = stats_paragraph.add_run("    ·    ")
+                sep_run.font.color.rgb = RGBColor.from_string(MUTED.lstrip("#"))
+            value_run = stats_paragraph.add_run(f"{stat.get('value', '')} ")
+            value_run.bold = True
+            value_run.font.color.rgb = RGBColor.from_string(PRIMARY.lstrip("#"))
+            label_run = stats_paragraph.add_run(stat.get("label", ""))
+            label_run.font.size = Pt(9)
+            label_run.font.color.rgb = RGBColor.from_string(MUTED.lstrip("#"))
+        document.add_paragraph().paragraph_format.space_after = Pt(4)
+
+    for index, section in enumerate(content.get("sections") or [], start=1):
+        section_paragraph = document.add_paragraph()
+        _set_paragraph_box(section_paragraph, fill_hex=MUTED_BG, border_hex=BORDER, bottom=False, size=4, space=8)
+        section_paragraph.paragraph_format.space_before = Pt(4)
+        badge_run = section_paragraph.add_run(f" {index} ")
+        badge_run.bold = True
+        badge_run.font.color.rgb = RGBColor.from_string("FFFFFF")
+        _set_run_shading(badge_run, PRIMARY)
+        title_run = section_paragraph.add_run(f"  {section.get('title', '')}")
+        title_run.bold = True
+        title_run.font.color.rgb = RGBColor.from_string(PRIMARY.lstrip("#"))
+
+        body_paragraph = document.add_paragraph()
+        _set_paragraph_box(body_paragraph, fill_hex=MUTED_BG, border_hex=BORDER, top=False, size=4, space=8)
+        _add_inline_runs(body_paragraph, section.get("body", ""))
+        document.add_paragraph().paragraph_format.space_after = Pt(2)
+
+
 def build_docx(artifact_type: str, notebook_title: str, content: dict, generated_at: datetime) -> Document:
     document = Document()
-    _setup_page(document, notebook_title)
-    _add_title(document, artifact_type, notebook_title, generated_at)
+    is_infographic = artifact_type == "infographic"
+    _setup_page(document, notebook_title, include_header_footer=not is_infographic)
+    if not is_infographic:
+        _add_title(document, artifact_type, notebook_title, generated_at)
 
     if artifact_type == "summary":
         _markdown_blocks_to_docx(document, _parse_markdown_blocks(content.get("summary_markdown", "")))
@@ -543,6 +601,8 @@ def build_docx(artifact_type: str, notebook_title: str, content: dict, generated
         _timeline_to_docx(document, content)
     elif artifact_type == "briefing":
         _briefing_to_docx(document, content)
+    elif artifact_type == "infographic":
+        _infographic_to_docx(document, content)
     else:
         raise ValueError(f"Unknown studio artifact type: {artifact_type!r}")
     return document
@@ -662,6 +722,46 @@ def _briefing_to_html(content: dict) -> str:
     return "\n".join(parts)
 
 
+def _build_infographic_html(content: dict) -> str:
+    """Poster layout (not a flowing document like the other types): a
+    PRIMARY-colored header band, an optional stat-box row, and a 2-column
+    card grid with numbered badges (analog to the `.faq-q-badge` pattern
+    above) - mirrors StudioInfographicView.tsx 1:1 so the in-app preview and
+    the exported PDF stay visually consistent.
+    """
+    stats = content.get("stats") or []
+    stats_html = ""
+    if stats:
+        stat_items = "".join(
+            "<div class='infographic-stat'>"
+            f"<div class='infographic-stat-value'>{html.escape(stat.get('value', ''))}</div>"
+            f"<div class='infographic-stat-label'>{html.escape(stat.get('label', ''))}</div>"
+            "</div>"
+            for stat in stats
+        )
+        stats_html = f"<div class='infographic-stats'>{stat_items}</div>"
+
+    cards_html = "".join(
+        "<div class='infographic-card'>"
+        "<div class='infographic-card-header'>"
+        f"<span class='infographic-badge'>{index}</span>"
+        f"<h3 class='infographic-card-title'>{html.escape(section.get('title', ''))}</h3>"
+        "</div>"
+        f"<p class='infographic-card-body'>{html.escape(section.get('body', ''))}</p>"
+        "</div>"
+        for index, section in enumerate(content.get("sections") or [], start=1)
+    )
+
+    return (
+        "<div class='infographic-header'>"
+        f"<h1 class='infographic-headline'>{html.escape(content.get('headline', ''))}</h1>"
+        f"<p class='infographic-subheadline'>{html.escape(content.get('subheadline', ''))}</p>"
+        "</div>"
+        f"{stats_html}"
+        f"<div class='infographic-grid'>{cards_html}</div>"
+    )
+
+
 def _css_escape(text: str) -> str:
     return text.replace("\\", "\\\\").replace('"', '\\"')
 
@@ -676,8 +776,10 @@ _HTML_TEMPLATE = Environment(loader=BaseLoader(), autoescape=True).from_string(
   @page {
     size: A4;
     margin: 2.6cm 2cm 2.4cm 2cm;
+    {%% if show_chrome %%}
     @top-left { content: "NotebookLM Clone · {{ notebook_title_css }}"; font-size: 8pt; color: %(muted)s; }
     @bottom-right { content: "Seite " counter(page) " / " counter(pages); font-size: 8pt; color: %(muted)s; }
+    {%% endif %%}
   }
   body { font-family: 'Liberation Sans', Arial, sans-serif; color: %(foreground)s; font-size: 11pt; line-height: 1.6; }
   .doc-title { font-size: 22pt; font-weight: 700; margin: 0 0 10pt 0; padding-bottom: 10pt; border-bottom: 3px solid %(primary)s; }
@@ -716,11 +818,27 @@ _HTML_TEMPLATE = Environment(loader=BaseLoader(), autoescape=True).from_string(
   .briefing-section ul { margin: 0; padding-left: 18pt; }
   .briefing-section li { margin-bottom: 4pt; }
   .briefing-empty { color: %(muted)s; font-style: italic; margin: 0; }
+
+  .infographic-header { background: %(primary)s; border-radius: 10pt; padding: 22pt 24pt; margin: 0 0 16pt 0; }
+  .infographic-headline { margin: 0; font-size: 22pt; font-weight: 700; color: #fff; }
+  .infographic-subheadline { margin: 6pt 0 0 0; font-size: 11pt; color: #fff; opacity: 0.85; }
+  .infographic-stats { display: flex; gap: 10pt; margin-bottom: 16pt; }
+  .infographic-stat { flex: 1; text-align: center; border: 1px solid %(border)s; border-radius: 8pt; background: %(primary_tint)s; padding: 10pt 8pt; }
+  .infographic-stat-value { font-size: 16pt; font-weight: 700; color: %(primary)s; }
+  .infographic-stat-label { margin-top: 2pt; font-size: 8.5pt; color: %(muted)s; }
+  .infographic-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12pt; }
+  .infographic-card { border: 1px solid %(border)s; border-radius: 8pt; padding: 12pt 14pt; background: #fff; page-break-inside: avoid; }
+  .infographic-card-header { display: flex; align-items: center; gap: 8pt; margin-bottom: 6pt; }
+  .infographic-badge { flex: 0 0 auto; width: 18pt; height: 18pt; border-radius: 50%%; background: %(primary)s; color: #fff; font-size: 10pt; font-weight: 700; text-align: center; line-height: 18pt; }
+  .infographic-card-title { margin: 0; font-size: 11.5pt; color: %(primary)s; font-weight: 700; }
+  .infographic-card-body { margin: 0; font-size: 10pt; color: %(foreground)s; }
 </style>
 </head>
 <body>
+{%% if show_chrome %%}
 <h1 class="doc-title">{{ title }}</h1>
 <p class="doc-meta">{{ subtitle }}</p>
+{%% endif %%}
 {{ body | safe }}
 </body>
 </html>"""
@@ -744,6 +862,8 @@ def build_html(artifact_type: str, notebook_title: str, content: dict, generated
         body = _timeline_to_html(content)
     elif artifact_type == "briefing":
         body = _briefing_to_html(content)
+    elif artifact_type == "infographic":
+        body = _build_infographic_html(content)
     else:
         raise ValueError(f"Unknown studio artifact type: {artifact_type!r}")
 
@@ -752,6 +872,7 @@ def build_html(artifact_type: str, notebook_title: str, content: dict, generated
         subtitle=f"Generiert am {generated_at.strftime('%d.%m.%Y %H:%M')} Uhr",
         notebook_title_css=Markup(_css_escape(notebook_title)),
         body=body,
+        show_chrome=artifact_type != "infographic",
     )
 
 

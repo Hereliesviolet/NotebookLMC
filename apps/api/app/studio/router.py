@@ -7,7 +7,7 @@ from io import BytesIO
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import AuthenticatedUser, get_current_user, get_db
@@ -15,7 +15,6 @@ from app.core.logging import get_logger
 from app.db import models
 from app.notebooks import service as notebooks_service
 from app.schemas.studio import StudioArtifactOut
-from app.storage import minio_client
 from app.studio import export as export_service
 from app.studio import service
 
@@ -179,38 +178,6 @@ async def studio_infographic(
     notebook_id: str, db: AsyncSession = Depends(get_db), user: AuthenticatedUser = Depends(get_current_user)
 ) -> StudioArtifactOut:
     return await _generate(notebook_id, "infographic", db, user)
-
-
-@router.get("/{notebook_id}/studio/infographic/image")
-async def get_studio_infographic_image(
-    notebook_id: str, db: AsyncSession = Depends(get_db), user: AuthenticatedUser = Depends(get_current_user)
-) -> Response:
-    """Serves the agent-generated infographic PNG (architecture doc §19)
-    from MinIO. No Content-Disposition header, so it can be used directly
-    as an <img> src (the frontend fetches it with an Authorization header
-    and renders it as a blob/object URL, since <img src> can't set one).
-    """
-    await _get_notebook_checked(db, notebook_id, user)
-    artifact = await service.get_artifact(db, notebook_id, "infographic")
-    if artifact is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No 'infographic' artifact has been generated yet for this notebook",
-        )
-    object_path = (artifact.content_json or {}).get("image_object_path")
-    if not object_path:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Fuer dieses Infografik-Artefakt wurde noch kein Bild generiert.",
-        )
-    try:
-        png_bytes = minio_client.download_bytes(object_path)
-    except Exception as exc:
-        logger.exception("Loading infographic image failed for notebook=%s", notebook_id)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Laden des Bildes fehlgeschlagen: {exc}"
-        ) from exc
-    return Response(content=png_bytes, media_type="image/png")
 
 
 @router.post("/{notebook_id}/studio/audio-script")

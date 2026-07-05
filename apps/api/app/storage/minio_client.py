@@ -44,10 +44,6 @@ def extracted_text_path(notebook_id: str, source_id: str) -> str:
     return f"{notebook_id}/{source_id}/extracted/text.txt"
 
 
-def studio_infographic_image_path(notebook_id: str) -> str:
-    return f"{notebook_id}/studio/infographic.png"
-
-
 def upload_bytes(object_path: str, data: bytes, content_type: str = "application/octet-stream") -> None:
     settings = get_settings()
     client = get_minio_client()

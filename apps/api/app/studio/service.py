@@ -12,11 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.db import models
-from app.langdock.client import ImageGenerationError, ResponseTruncatedError, get_langdock_client
+from app.langdock.client import ResponseTruncatedError, get_langdock_client
 from app.langdock.prompts_loader import load_prompt, load_tool_schema
-from app.storage import minio_client
 from app.studio.context import build_notebook_wide_context
-from app.studio.infographic_image import build_infographic_image_prompt
 
 logger = get_logger(__name__)
 
@@ -108,38 +106,8 @@ async def generate_artifact(
     max_tokens = settings.studio_answer_max_tokens
     content, usage = await _generate_and_validate(client, artifact_type, system_prompt, user_message, max_tokens, notebook_id)
 
-    if artifact_type == "infographic":
-        content = _generate_and_store_infographic_image(client, settings, notebook_id, content)
-
     source_id_list = [str(s.id) for s in sources]
     return await _upsert_artifact(db, notebook_id, artifact_type, content, source_id_list, usage.model)
-
-
-def _generate_and_store_infographic_image(client, settings, notebook_id: str, content: dict) -> dict:
-    """Step 2 of infographic generation (architecture doc §19): turns the
-    Sonnet-generated structured content (step 1, above) into a deterministic
-    image-generation prompt and calls the Langdock Image-Generation agent,
-    then persists the resulting PNG in MinIO. Replaces the former
-    WeasyPrint/pdf2image rasterize pipeline (infographic_render.py) as the
-    image source - the artifact's content_json keeps storing the structured
-    text (headline/sections/stats) plus the MinIO object path, so "Neu
-    generieren" simply overwrites both.
-    """
-    if not settings.langdock_infographic_agent_id:
-        raise StudioGenerationError(
-            "Kein Langdock-Bildgenerierungs-Agent konfiguriert - LANGDOCK_INFOGRAPHIC_AGENT_ID fehlt in .env."
-        )
-
-    prompt = build_infographic_image_prompt(content)
-    try:
-        png_bytes = client.generate_agent_image(settings.langdock_infographic_agent_id, prompt)
-    except ImageGenerationError as exc:
-        logger.warning("Infographic image generation failed for notebook=%s: %s", notebook_id, exc)
-        raise StudioGenerationError(f"Bildgenerierung fehlgeschlagen, bitte erneut versuchen: {exc}") from exc
-
-    object_path = minio_client.studio_infographic_image_path(notebook_id)
-    minio_client.upload_bytes(object_path, png_bytes, content_type="image/png")
-    return {**content, "image_object_path": object_path}
 
 
 _MAX_GENERATION_ATTEMPTS = 3

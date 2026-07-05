@@ -156,7 +156,7 @@ export function StudioFullscreenOverlay({
                 </Button>
                 {exportMenuOpen && (
                   <div className="absolute right-0 top-full z-10 mt-1 w-40 overflow-hidden rounded-md border border-border bg-card shadow-lg">
-                    {(["docx", "pdf"] as const).map((format) => (
+                    {(type === "infographic" ? (["pdf"] as const) : (["docx", "pdf"] as const)).map((format) => (
                       <button
                         key={format}
                         onClick={() => handleExport(format)}
@@ -172,24 +172,19 @@ export function StudioFullscreenOverlay({
               </div>
             )}
             {artifact && (
-              <div className="flex flex-col items-end gap-1">
-                <Button variant="outline" size="sm" onClick={handleGenerate} disabled={generating}>
-                  {generating ? (
-                    <>
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      Wird generiert…
-                    </>
-                  ) : (
-                    <>
-                      <RefreshCw className="h-3.5 w-3.5" />
-                      Neu generieren
-                    </>
-                  )}
-                </Button>
-                {generating && type === "infographic" && (
-                  <p className="text-xs text-muted-foreground">Bildgenerierung dauert bis zu ca. 1 Minute…</p>
+              <Button variant="outline" size="sm" onClick={handleGenerate} disabled={generating}>
+                {generating ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Wird generiert…
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    Neu generieren
+                  </>
                 )}
-              </div>
+              </Button>
             )}
             <button
               onClick={handleClose}
@@ -219,22 +214,11 @@ export function StudioFullscreenOverlay({
                     "Generieren"
                   )}
                 </Button>
-                {generating && type === "infographic" && (
-                  <p className="text-xs text-muted-foreground">
-                    Die Bildgenerierung dauert deutlich länger als bei den Text-Formaten – bitte ca. 1 Minute
-                    einplanen.
-                  </p>
-                )}
               </div>
             )}
 
             {!loading && artifact && (
-              <StudioArtifactContent
-                type={type}
-                content={artifact.content}
-                notebookId={notebookId}
-                renderRefreshKey={renderRefreshKey}
-              />
+              <StudioArtifactContent type={type} content={artifact.content} renderRefreshKey={renderRefreshKey} />
             )}
           </div>
         </div>
@@ -246,12 +230,10 @@ export function StudioFullscreenOverlay({
 function StudioArtifactContent({
   type,
   content,
-  notebookId,
   renderRefreshKey,
 }: {
   type: StudioArtifactType;
   content: AnyStudioContent;
-  notebookId: string;
   renderRefreshKey: number;
 }) {
   switch (type) {
@@ -268,13 +250,7 @@ function StudioArtifactContent({
     case "mindmap":
       return <StudioMindmapView content={content as StudioMindmapContent} />;
     case "infographic":
-      return (
-        <StudioInfographicView
-          notebookId={notebookId}
-          content={content as StudioInfographicContent}
-          refreshKey={renderRefreshKey}
-        />
-      );
+      return <StudioInfographicView content={content as StudioInfographicContent} />;
     default:
       return null;
   }

@@ -99,10 +99,6 @@ export async function getStudioArtifact<T>(
   return (await response.json()) as StudioArtifact<T>;
 }
 
-// Fuer type="infographic" laeuft dieser POST synchron durch die
-// Bildgenerierung (Langdock-Agent, im Test 40-70s) - browser-native fetch()
-// hat kein eigenes Timeout, daher ist hier kein AbortController/Timeout
-// nötig, nur ein entsprechender Ladehinweis im UI (StudioFullscreenOverlay).
 export const generateStudioArtifact = <T,>(notebookId: string, type: StudioArtifactType) =>
   apiFetch<StudioArtifact<T>>(`/api/notebooks/${notebookId}/studio/${type}`, { method: "POST" });
 
@@ -136,19 +132,4 @@ export async function exportStudioArtifact(
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
-}
-
-export async function fetchStudioInfographicImage(notebookId: string, cacheBust?: number): Promise<Blob> {
-  // <img src> kann keinen Authorization-Header setzen, daher hier per fetch()
-  // laden und im Aufrufer (StudioInfographicView) als Object-URL rendern.
-  const token = getToken();
-  const headers = new Headers();
-  if (token) headers.set("Authorization", `Bearer ${token}`);
-
-  const query = cacheBust ? `?t=${cacheBust}` : "";
-  const response = await fetch(`${API_BASE_URL}/api/notebooks/${notebookId}/studio/infographic/image${query}`, {
-    headers,
-  });
-  if (!response.ok) throw new Error(`Grafik konnte nicht geladen werden (${response.status}): ${await response.text()}`);
-  return response.blob();
 }
