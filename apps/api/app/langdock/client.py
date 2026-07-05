@@ -11,12 +11,14 @@ Model ids (`LANGDOCK_PRIMARY_MODEL`, `LANGDOCK_FAST_MODEL`) are read
 exclusively from settings/.env - never hardcoded (see docs/langdock.md for
 how to discover them via the Langdock model list endpoint).
 """
+import base64
 import json
 import time
 from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Any, Literal
 
+import httpx
 from anthropic import Anthropic, APIStatusError
 from openai import OpenAI
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
@@ -92,6 +94,22 @@ class ResponseTruncatedError(Exception):
         super().__init__(message)
         self.stop_reason = stop_reason
         self.usage = usage
+
+
+class ImageGenerationError(Exception):
+    """Raised by generate_agent_image() when the Langdock agent call fails,
+    times out, or its response doesn't contain an image_generation
+    tool-result (e.g. the agent used a "bash"/code-execution tool to draw
+    the image itself instead of calling the image generation tool - observed
+    live for ambiguous prompts before the agent's Image Generation
+    capability was enabled).
+    """
+
+
+# Bildgenerierung ueber einen Langdock-Agenten dauert im Test 40-70s (deutlich
+# laenger als die Text-Endpunkte) - grosszuegiges Timeout, kein Retry-on-429
+# hier (die Agent-API ist ein anderer Endpoint als die Messages-API).
+_AGENT_IMAGE_TIMEOUT_SECONDS = 120.0
 
 
 class LangdockClient:
@@ -294,6 +312,51 @@ class LangdockClient:
             tool_description=tool.get("description", ""),
         )
 
+    def generate_agent_image(self, agent_id: str, prompt: str) -> bytes:
+        """Calls a Langdock Agent (with the "Image Generation" capability
+        enabled in the Langdock dashboard) and returns the generated PNG as
+        raw bytes.
+
+        Verified request/response contract (apps/api/app/studio/infographic_image.py):
+        POST {LANGDOCK_AGENT_BASE_URL}/chat/completions with
+        {"agentId", "messages": [...], "imageResponseFormat": "b64_json"}.
+        The response's `result` is a list of turns; the image is nested in
+        the turn with role="tool" whose content[0].toolName=="image_generation".
+        Only that turn is accepted - an agent can fall back to a "bash" tool
+        and draw the image itself via PIL for ambiguous prompts, which must
+        not be silently treated as a valid image result.
+        """
+        url = f"{self._settings.langdock_agent_base_url.rstrip('/')}/chat/completions"
+        body = {
+            "agentId": agent_id,
+            "messages": [{"id": "msg_1", "role": "user", "parts": [{"type": "text", "text": prompt}]}],
+            "imageResponseFormat": "b64_json",
+        }
+        started = time.monotonic()
+        try:
+            response = httpx.post(
+                url,
+                json=body,
+                headers={"Authorization": f"Bearer {self._settings.langdock_api_key}"},
+                timeout=_AGENT_IMAGE_TIMEOUT_SECONDS,
+            )
+            response.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise ImageGenerationError(f"Langdock-Agent-Aufruf zur Bildgenerierung fehlgeschlagen: {exc}") from exc
+        latency_ms = int((time.monotonic() - started) * 1000)
+
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise ImageGenerationError(f"Langdock-Agent-Antwort war kein gueltiges JSON: {exc}") from exc
+
+        base64_png = _extract_agent_image_generation_base64(payload)
+        logger.info("Langdock agent image generation (agent_id=%s) took %sms", agent_id, latency_ms)
+        try:
+            return base64.b64decode(base64_png)
+        except (ValueError, TypeError) as exc:
+            raise ImageGenerationError(f"Base64-Bilddaten der Agent-Antwort konnten nicht dekodiert werden: {exc}") from exc
+
     def embed(self, texts: list[str]) -> LangdockEmbeddingResponse:
         """Langdock OpenAI-compatible embeddings (architecture doc §7.3).
 
@@ -354,6 +417,41 @@ class LangdockClient:
         if not self._settings.langdock_usage_export_enabled:
             raise RuntimeError("Langdock usage export is disabled (LANGDOCK_USAGE_EXPORT_ENABLED=false)")
         raise NotImplementedError("TODO: implement once the Langdock Usage Export API contract is confirmed")
+
+
+def _extract_agent_image_generation_base64(payload: dict[str, Any]) -> str:
+    """Walks the Langdock Agent chat/completions response's `result` turns
+    and returns the base64 PNG from the first role="tool" turn whose
+    content[0].toolName=="image_generation". Raises ImageGenerationError if
+    no such turn exists (e.g. the agent used a "bash" tool instead) or if
+    that turn's images array is empty.
+    """
+    turns = payload.get("result")
+    if not isinstance(turns, list):
+        raise ImageGenerationError(f"Unerwartetes Antwortformat vom Langdock-Agenten: kein 'result'-Array: {payload!r}")
+
+    for turn in turns:
+        if not isinstance(turn, dict) or turn.get("role") != "tool":
+            continue
+        content = turn.get("content")
+        if not isinstance(content, list) or not content:
+            continue
+        first = content[0]
+        if not isinstance(first, dict):
+            continue
+        if first.get("type") != "tool-result" or first.get("toolName") != "image_generation":
+            continue
+        images = (((first.get("output") or {}).get("value") or {}).get("images")) or []
+        if not images or not isinstance(images[0], dict) or not images[0].get("base64"):
+            raise ImageGenerationError(
+                "Der Langdock-Agent hat ein image_generation-Tool-Result ohne Bilddaten geliefert."
+            )
+        return images[0]["base64"]
+
+    raise ImageGenerationError(
+        "Der Langdock-Agent hat kein image_generation-Tool-Result geliefert (moeglicherweise wurde stattdessen "
+        "ein anderes Tool wie 'bash' genutzt) - keine Bilddaten zum Extrahieren gefunden."
+    )
 
 
 def _variable_wait(backoffs: list[int]):

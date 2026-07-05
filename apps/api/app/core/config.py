@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     langdock_enable_extended_thinking: bool = False
     langdock_agent_base_url: str = "https://api.langdock.com/agent/v1"
     langdock_use_agents_for_structured_tasks: bool = False
+    # Langdock-Agent mit aktivierter "Image Generation"-Capability fuer die
+    # Studio-Infografik (studio/infographic_image.py). Agent-ID kommt
+    # ausschliesslich aus der env, siehe .env.example.
+    langdock_infographic_agent_id: str = ""
     langdock_knowledge_api_enabled: bool = False
     langdock_knowledge_base_url: str = "https://api.langdock.com/knowledge"
     langdock_usage_export_enabled: bool = False

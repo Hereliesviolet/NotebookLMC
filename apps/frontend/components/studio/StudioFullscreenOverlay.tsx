@@ -172,19 +172,24 @@ export function StudioFullscreenOverlay({
               </div>
             )}
             {artifact && (
-              <Button variant="outline" size="sm" onClick={handleGenerate} disabled={generating}>
-                {generating ? (
-                  <>
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    Wird generiert…
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="h-3.5 w-3.5" />
-                    Neu generieren
-                  </>
+              <div className="flex flex-col items-end gap-1">
+                <Button variant="outline" size="sm" onClick={handleGenerate} disabled={generating}>
+                  {generating ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Wird generiert…
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="h-3.5 w-3.5" />
+                      Neu generieren
+                    </>
+                  )}
+                </Button>
+                {generating && type === "infographic" && (
+                  <p className="text-xs text-muted-foreground">Bildgenerierung dauert bis zu ca. 1 Minute…</p>
                 )}
-              </Button>
+              </div>
             )}
             <button
               onClick={handleClose}
@@ -214,6 +219,12 @@ export function StudioFullscreenOverlay({
                     "Generieren"
                   )}
                 </Button>
+                {generating && type === "infographic" && (
+                  <p className="text-xs text-muted-foreground">
+                    Die Bildgenerierung dauert deutlich länger als bei den Text-Formaten – bitte ca. 1 Minute
+                    einplanen.
+                  </p>
+                )}
               </div>
             )}
 
