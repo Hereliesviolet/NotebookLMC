@@ -7,6 +7,9 @@ import { MarkdownContent } from "@/components/ui/markdown-content";
 import { StudioFaqView } from "@/components/studio/StudioFaqView";
 import { StudioTimelineView } from "@/components/studio/StudioTimelineView";
 import { StudioBriefingView } from "@/components/studio/StudioBriefingView";
+import { StudioQuizView } from "@/components/studio/StudioQuizView";
+import { StudioMindmapView } from "@/components/studio/StudioMindmapView";
+import { StudioInfographicView } from "@/components/studio/StudioInfographicView";
 import { exportStudioArtifact, generateStudioArtifact, getStudioArtifact } from "@/lib/api-client";
 import { cn, formatDate } from "@/lib/utils";
 import type {
@@ -14,11 +17,21 @@ import type {
   StudioArtifactType,
   StudioBriefingContent,
   StudioFaqContent,
+  StudioInfographicContent,
+  StudioMindmapContent,
+  StudioQuizContent,
   StudioSummaryContent,
   StudioTimelineContent,
 } from "@/lib/types";
 
-type AnyStudioContent = StudioSummaryContent | StudioFaqContent | StudioTimelineContent | StudioBriefingContent;
+type AnyStudioContent =
+  | StudioSummaryContent
+  | StudioFaqContent
+  | StudioTimelineContent
+  | StudioBriefingContent
+  | StudioQuizContent
+  | StudioMindmapContent
+  | StudioInfographicContent;
 
 interface StudioFullscreenOverlayProps {
   notebookId: string;
@@ -42,6 +55,7 @@ export function StudioFullscreenOverlay({
   const [exportFormat, setExportFormat] = useState<"docx" | "pdf" | null>(null);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [renderRefreshKey, setRenderRefreshKey] = useState(() => Date.now());
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => setVisible(true));
@@ -90,6 +104,7 @@ export function StudioFullscreenOverlay({
     try {
       const result = await generateStudioArtifact<AnyStudioContent>(notebookId, type);
       setArtifact(result);
+      setRenderRefreshKey(Date.now());
       onArtifactChange?.(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Inhalt konnte nicht generiert werden.");
@@ -202,7 +217,14 @@ export function StudioFullscreenOverlay({
               </div>
             )}
 
-            {!loading && artifact && <StudioArtifactContent type={type} content={artifact.content} />}
+            {!loading && artifact && (
+              <StudioArtifactContent
+                type={type}
+                content={artifact.content}
+                notebookId={notebookId}
+                renderRefreshKey={renderRefreshKey}
+              />
+            )}
           </div>
         </div>
       </div>
@@ -210,7 +232,17 @@ export function StudioFullscreenOverlay({
   );
 }
 
-function StudioArtifactContent({ type, content }: { type: StudioArtifactType; content: AnyStudioContent }) {
+function StudioArtifactContent({
+  type,
+  content,
+  notebookId,
+  renderRefreshKey,
+}: {
+  type: StudioArtifactType;
+  content: AnyStudioContent;
+  notebookId: string;
+  renderRefreshKey: number;
+}) {
   switch (type) {
     case "summary":
       return <MarkdownContent content={(content as StudioSummaryContent).summary_markdown} />;
@@ -220,6 +252,18 @@ function StudioArtifactContent({ type, content }: { type: StudioArtifactType; co
       return <StudioTimelineView content={content as StudioTimelineContent} />;
     case "briefing":
       return <StudioBriefingView content={content as StudioBriefingContent} />;
+    case "quiz":
+      return <StudioQuizView key={renderRefreshKey} content={content as StudioQuizContent} />;
+    case "mindmap":
+      return <StudioMindmapView content={content as StudioMindmapContent} />;
+    case "infographic":
+      return (
+        <StudioInfographicView
+          notebookId={notebookId}
+          content={content as StudioInfographicContent}
+          refreshKey={renderRefreshKey}
+        />
+      );
     default:
       return null;
   }

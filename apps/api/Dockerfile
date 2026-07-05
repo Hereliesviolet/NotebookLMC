@@ -8,6 +8,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    # pdf2image (apps/api/app/studio/infographic_render.py) shells out to
+    # poppler's pdftoppm/pdftocairo binaries - same package apps/worker's
+    # Dockerfile already installs for its OCR pipeline.
+    poppler-utils \
     # WeasyPrint (apps/api/app/studio/export.py) runtime libs - installed via
     # pip wheels, so only the shared libraries it dlopen()s at runtime are
     # needed (no -dev/compile packages). Versions >=53 dropped the old

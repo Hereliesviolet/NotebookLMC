@@ -133,3 +133,16 @@ export async function exportStudioArtifact(
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 }
+
+export async function fetchStudioInfographicImage(notebookId: string, cacheBust?: number): Promise<Blob> {
+  const token = getToken();
+  const headers = new Headers();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+
+  const query = cacheBust ? `?_=${cacheBust}` : "";
+  const response = await fetch(`${API_BASE_URL}/api/notebooks/${notebookId}/studio/infographic/render${query}`, {
+    headers,
+  });
+  if (!response.ok) throw new Error(`Rendern fehlgeschlagen (${response.status}): ${await response.text()}`);
+  return response.blob();
+}

@@ -7,7 +7,7 @@ from io import BytesIO
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import AuthenticatedUser, get_current_user, get_db
@@ -16,6 +16,7 @@ from app.db import models
 from app.notebooks import service as notebooks_service
 from app.schemas.studio import StudioArtifactOut
 from app.studio import export as export_service
+from app.studio import infographic_render
 from app.studio import service
 
 logger = get_logger(__name__)
@@ -157,6 +158,48 @@ async def studio_briefing(
     notebook_id: str, db: AsyncSession = Depends(get_db), user: AuthenticatedUser = Depends(get_current_user)
 ) -> StudioArtifactOut:
     return await _generate(notebook_id, "briefing", db, user)
+
+
+@router.post("/{notebook_id}/studio/quiz", response_model=StudioArtifactOut)
+async def studio_quiz(
+    notebook_id: str, db: AsyncSession = Depends(get_db), user: AuthenticatedUser = Depends(get_current_user)
+) -> StudioArtifactOut:
+    return await _generate(notebook_id, "quiz", db, user)
+
+
+@router.post("/{notebook_id}/studio/mindmap", response_model=StudioArtifactOut)
+async def studio_mindmap(
+    notebook_id: str, db: AsyncSession = Depends(get_db), user: AuthenticatedUser = Depends(get_current_user)
+) -> StudioArtifactOut:
+    return await _generate(notebook_id, "mindmap", db, user)
+
+
+@router.post("/{notebook_id}/studio/infographic", response_model=StudioArtifactOut)
+async def studio_infographic(
+    notebook_id: str, db: AsyncSession = Depends(get_db), user: AuthenticatedUser = Depends(get_current_user)
+) -> StudioArtifactOut:
+    return await _generate(notebook_id, "infographic", db, user)
+
+
+@router.get("/{notebook_id}/studio/infographic/render")
+async def render_studio_infographic(
+    notebook_id: str, db: AsyncSession = Depends(get_db), user: AuthenticatedUser = Depends(get_current_user)
+) -> Response:
+    await _get_notebook_checked(db, notebook_id, user)
+    artifact = await service.get_artifact(db, notebook_id, "infographic")
+    if artifact is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No 'infographic' artifact has been generated yet for this notebook",
+        )
+    try:
+        png_bytes = infographic_render.render_png(artifact.content_json)
+    except Exception as exc:
+        logger.exception("Infographic rendering failed for notebook=%s", notebook_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Rendering fehlgeschlagen: {exc}"
+        ) from exc
+    return Response(content=png_bytes, media_type="image/png")
 
 
 @router.post("/{notebook_id}/studio/audio-script")

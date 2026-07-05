@@ -1,0 +1,49 @@
+{
+  "name": "studio_mindmap",
+  "description": "Liefert eine hierarchische Mindmap (zentrales Thema, Hauptzweige, Unterpunkte) auf Basis der bereitgestellten Quellen.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "root": {
+        "type": "object",
+        "description": "Wurzelknoten der Mindmap.",
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "Zentrales Thema, kurz (2-6 Woerter)."
+          },
+          "children": {
+            "type": "array",
+            "description": "Hauptzweige, max. 6-8 Eintraege.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "description": "Hauptzweig-Label, kurz (2-6 Woerter)."
+                },
+                "children": {
+                  "type": "array",
+                  "description": "Unterpunkte dieses Zweigs, max. 4 Eintraege.",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "label": {
+                        "type": "string",
+                        "description": "Unterpunkt-Label, kurz (2-6 Woerter)."
+                      }
+                    },
+                    "required": ["label"]
+                  }
+                }
+              },
+              "required": ["label", "children"]
+            }
+          }
+        },
+        "required": ["label", "children"]
+      }
+    },
+    "required": ["root"]
+  }
+}

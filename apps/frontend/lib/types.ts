@@ -80,7 +80,15 @@ export interface User {
   role: string;
 }
 
-export type StudioArtifactType = "summary" | "faq" | "timeline" | "briefing" | "audio-script";
+export type StudioArtifactType =
+  | "summary"
+  | "faq"
+  | "timeline"
+  | "briefing"
+  | "audio-script"
+  | "quiz"
+  | "mindmap"
+  | "infographic";
 
 export interface StudioSummaryContent {
   summary_markdown: string;
@@ -114,6 +122,51 @@ export interface StudioBriefingContent {
   risks: string[];
   recommended_actions: string[];
   open_questions: string[];
+}
+
+export interface StudioQuizQuestion {
+  question: string;
+  options: string[];
+  correct_index: number;
+  explanation: string;
+  source_id: string;
+}
+
+export interface StudioQuizContent {
+  questions: StudioQuizQuestion[];
+}
+
+export interface StudioMindmapLeaf {
+  label: string;
+}
+
+export interface StudioMindmapChild {
+  label: string;
+  children: StudioMindmapLeaf[];
+}
+
+export interface StudioMindmapContent {
+  root: {
+    label: string;
+    children: StudioMindmapChild[];
+  };
+}
+
+export interface StudioInfographicSection {
+  title: string;
+  body: string;
+}
+
+export interface StudioInfographicStat {
+  label: string;
+  value: string;
+}
+
+export interface StudioInfographicContent {
+  headline: string;
+  subheadline: string;
+  sections: StudioInfographicSection[];
+  stats: StudioInfographicStat[];
 }
 
 export interface StudioArtifact<T> {

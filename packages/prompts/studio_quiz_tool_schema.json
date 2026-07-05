@@ -1,0 +1,35 @@
+{
+  "name": "studio_quiz",
+  "description": "Liefert ein Multiple-Choice-Quiz mit 8-10 Fragen, ausschliesslich auf Basis der bereitgestellten Quellen.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "questions": {
+        "type": "array",
+        "description": "8-10 Fragen.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "question": { "type": "string" },
+            "options": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Genau 4 Antwortoptionen, davon genau eine korrekt."
+            },
+            "correct_index": {
+              "type": "integer",
+              "description": "Index (0-3) der korrekten Antwort in `options`."
+            },
+            "explanation": {
+              "type": "string",
+              "description": "Kurze Begruendung der korrekten Antwort mit Bezug auf die Quelle."
+            },
+            "source_id": { "type": "string" }
+          },
+          "required": ["question", "options", "correct_index", "explanation", "source_id"]
+        }
+      }
+    },
+    "required": ["questions"]
+  }
+}

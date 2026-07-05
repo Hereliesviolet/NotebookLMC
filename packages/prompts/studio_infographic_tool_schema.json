@@ -1,0 +1,42 @@
+{
+  "name": "studio_infographic",
+  "description": "Liefert kompakten Text fuer ein festes Poster-Layout (Infografik) - kurze, praegnante Formulierungen, kein Fliesstext.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "headline": {
+        "type": "string",
+        "description": "Haupttitel der Infografik, max. 8 Woerter."
+      },
+      "subheadline": {
+        "type": "string",
+        "description": "Kurzer Untertitel, max. 12 Woerter."
+      },
+      "sections": {
+        "type": "array",
+        "description": "Genau 3-4 Sektionen fuer das Karten-Grid.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "title": { "type": "string", "description": "Kurzer Abschnittstitel, max. 5 Woerter." },
+            "body": { "type": "string", "description": "Max. 2 kurze Saetze - kein Fliesstext, poster-tauglich." }
+          },
+          "required": ["title", "body"]
+        }
+      },
+      "stats": {
+        "type": "array",
+        "description": "0-4 Kennzahlen, die sich aus den Quellen ergeben. Leeres Array falls keine passenden Zahlen vorhanden sind.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "label": { "type": "string", "description": "Kurze Bezeichnung der Kennzahl, max. 4 Woerter." },
+            "value": { "type": "string", "description": "Kurzer Wert, z. B. '180.000 EUR' oder '3 Phasen'." }
+          },
+          "required": ["label", "value"]
+        }
+      }
+    },
+    "required": ["headline", "subheadline", "sections", "stats"]
+  }
+}

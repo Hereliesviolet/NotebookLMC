@@ -1,7 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FileText, HelpCircle, GanttChartSquare, ClipboardList, type LucideIcon } from "lucide-react";
+import {
+  FileText,
+  HelpCircle,
+  GanttChartSquare,
+  ClipboardList,
+  Brain,
+  Network,
+  LayoutTemplate,
+  type LucideIcon,
+} from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { StudioFullscreenOverlay } from "@/components/studio/StudioFullscreenOverlay";
 import { getStudioArtifact } from "@/lib/api-client";
@@ -20,6 +29,9 @@ const STUDIO_FEATURES: StudioFeature[] = [
   { type: "faq", icon: HelpCircle, title: "FAQ", description: "Häufige Fragen aus den Quellen ableiten" },
   { type: "timeline", icon: GanttChartSquare, title: "Timeline", description: "Chronologie über mehrere Quellen" },
   { type: "briefing", icon: ClipboardList, title: "Briefing", description: "Kompaktes Entscheidungs-Briefing" },
+  { type: "quiz", icon: Brain, title: "Quiz", description: "Wissen zu den Quellen testen" },
+  { type: "mindmap", icon: Network, title: "Mindmap", description: "Themen als Baumstruktur visualisieren" },
+  { type: "infographic", icon: LayoutTemplate, title: "Infografik", description: "Kernaussagen als Grafik zusammenfassen" },
 ];
 
 type ArtifactStatus = StudioArtifact<unknown> | null | undefined;

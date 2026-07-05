@@ -18,19 +18,25 @@ from app.studio.context import build_notebook_wide_context
 
 logger = get_logger(__name__)
 
-STUDIO_TYPES = ("summary", "faq", "timeline", "briefing")
+STUDIO_TYPES = ("summary", "faq", "timeline", "briefing", "quiz", "mindmap", "infographic")
 
 _PROMPT_NAMES = {
     "summary": "studio_summary",
     "faq": "studio_faq",
     "timeline": "studio_timeline",
     "briefing": "studio_briefing",
+    "quiz": "studio_quiz",
+    "mindmap": "studio_mindmap",
+    "infographic": "studio_infographic",
 }
 _TOOL_SCHEMA_NAMES = {
     "summary": "studio_summary_tool_schema",
     "faq": "studio_faq_tool_schema",
     "timeline": "studio_timeline_tool_schema",
     "briefing": "studio_briefing_tool_schema",
+    "quiz": "studio_quiz_tool_schema",
+    "mindmap": "studio_mindmap_tool_schema",
+    "infographic": "studio_infographic_tool_schema",
 }
 
 # Sonnet's tool-use occasionally stringifies a nested array field instead of
@@ -47,6 +53,12 @@ _ARRAY_FIELDS = {
     "faq": ["items"],
     "timeline": ["events"],
     "briefing": ["key_points", "risks", "recommended_actions", "open_questions"],
+    "quiz": ["questions"],
+    "infographic": ["sections", "stats"],
+    # mindmap's only array-shaped field ("root.children", nested two levels
+    # deep) isn't a top-level content field, so it isn't covered by
+    # _normalize_content()'s flat-field re-parsing below - add a nested-path
+    # variant here if testing shows Sonnet stringifying it too.
 }
 
 
