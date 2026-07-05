@@ -1,0 +1,42 @@
+{
+  "name": "final_answer",
+  "description": "Liefert die strukturierte, quellengebundene Antwort auf die Nutzerfrage inkl. Zitaten. Muss fuer jede Antwort aufgerufen werden.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "answer": {
+        "type": "string",
+        "description": "Die vollstaendige Antwort auf die Nutzerfrage. Markdown-Formatierung (Ueberschriften, Aufzaehlungen, Fettdruck, Code-Bloecke, wörtliche Zitate aus den Quellen) ist erlaubt und erwuenscht."
+      },
+      "citations": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "source_id": { "type": "string" },
+            "chunk_id": { "type": "string" },
+            "document_name": { "type": "string" },
+            "page_start": { "type": "integer" },
+            "page_end": { "type": "integer" },
+            "quote": { "type": "string" },
+            "supports_claim": { "type": "string" }
+          },
+          "required": ["source_id", "chunk_id", "document_name", "quote", "supports_claim"]
+        }
+      },
+      "confidence": {
+        "type": "string",
+        "enum": ["low", "medium", "high"]
+      },
+      "missing_information": {
+        "type": "array",
+        "items": { "type": "string" }
+      },
+      "follow_up_questions": {
+        "type": "array",
+        "items": { "type": "string" }
+      }
+    },
+    "required": ["answer", "citations", "confidence", "missing_information", "follow_up_questions"]
+  }
+}

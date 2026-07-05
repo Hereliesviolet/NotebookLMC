@@ -4,9 +4,11 @@ In Docker, packages/prompts is mounted read-only at /app/packages/prompts
 (see docker-compose.yml). For local (non-Docker) development, we fall back
 to the relative path from the repo root.
 """
+import json
 import os
 from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
 def _candidate_dirs() -> list[Path]:
     candidates = [Path("/app/packages/prompts")]
@@ -39,3 +41,13 @@ def load_prompt(name: str) -> str:
 def load_output_schema() -> str:
     path = _prompts_dir() / "output_schema.json"
     return path.read_text(encoding="utf-8").strip()
+
+
+@lru_cache
+def load_final_answer_tool() -> dict[str, Any]:
+    """Anthropic tool definition (name/description/input_schema) for the final
+    chat answer - passed as `tools=[...]` with `tool_choice={"type": "tool", ...}`
+    so the model's JSON is parsed/validated server-side instead of as free text.
+    """
+    path = _prompts_dir() / "final_answer_tool_schema.json"
+    return json.loads(path.read_text(encoding="utf-8"))

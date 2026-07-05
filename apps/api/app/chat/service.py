@@ -6,8 +6,6 @@ User Question -> [Haiku Intent Detection] -> [Haiku Query Rewrite]
               -> Sonnet 5 Answer Generation -> Citation Validation
               -> Response mit Quellenkarten
 """
-import json
-
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,7 +13,7 @@ from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.db import models
 from app.langdock.client import ResponseTruncatedError, get_langdock_client
-from app.langdock.prompts_loader import load_output_schema, load_prompt
+from app.langdock.prompts_loader import load_final_answer_tool, load_prompt
 from app.rag import query_understanding
 from app.rag.citation_validation import downgrade_confidence_if_unsupported, validate_citations
 from app.rag.context_assembly import build_context_block, fetch_chunk_texts
@@ -80,16 +78,14 @@ async def answer_question(
     context = build_context_block(top_chunks, texts_by_chunk_id)
 
     system_prompt = load_prompt("system_final_answer")
-    schema = load_output_schema()
-    user_message = (
-        f"Output-Schema (JSON, exakt einhalten):\n{schema}\n\n"
-        f"Frage:\n{payload.message}\n\n"
-        f"Quellenkontext:\n{context}"
-    )
+    final_answer_tool = load_final_answer_tool()
+    user_message = f"Frage:\n{payload.message}\n\nQuellenkontext:\n{context}"
 
     answer_max_tokens = settings.chat_answer_max_tokens
     try:
-        raw, usage = client.structured_output("sonnet", system_prompt, user_message, max_tokens=answer_max_tokens)
+        raw, usage = client.tool_output(
+            "sonnet", system_prompt, user_message, tool=final_answer_tool, max_tokens=answer_max_tokens
+        )
     except ResponseTruncatedError as exc:
         retry_max_tokens = answer_max_tokens * 2
         logger.warning(
@@ -99,8 +95,8 @@ async def answer_question(
             retry_max_tokens,
         )
         try:
-            raw, usage = client.structured_output(
-                "sonnet", system_prompt, user_message, max_tokens=retry_max_tokens
+            raw, usage = client.tool_output(
+                "sonnet", system_prompt, user_message, tool=final_answer_tool, max_tokens=retry_max_tokens
             )
         except ResponseTruncatedError as retry_exc:
             logger.error(

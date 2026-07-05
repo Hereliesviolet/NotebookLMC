@@ -129,9 +129,16 @@ class LangdockClient:
             wait=wait_fixed(backoffs[0]) if len(set(backoffs)) == 1 else _variable_wait(backoffs),
         )
 
-    def _generate(
-        self, tier: ModelTier, system: str, user_message: str, max_tokens: int, enable_thinking: bool = False
-    ) -> LangdockTextResponse:
+    def _call_messages(
+        self,
+        tier: ModelTier,
+        system: str,
+        user_message: str,
+        max_tokens: int,
+        enable_thinking: bool = False,
+        tools: list[dict[str, Any]] | None = None,
+        tool_choice: dict[str, Any] | None = None,
+    ) -> tuple[Any, LangdockUsage]:
         model = self._model_for(tier)
         started = time.monotonic()
 
@@ -144,6 +151,10 @@ class LangdockClient:
         if enable_thinking:
             create_kwargs["max_tokens"] = max_tokens + EXTENDED_THINKING_BUDGET_TOKENS
             create_kwargs["thinking"] = {"type": "enabled", "budget_tokens": EXTENDED_THINKING_BUDGET_TOKENS}
+        if tools:
+            create_kwargs["tools"] = tools
+        if tool_choice:
+            create_kwargs["tool_choice"] = tool_choice
 
         @self._retry_decorator()
         def _call():
@@ -156,11 +167,6 @@ class LangdockClient:
 
         response = _call()
         latency_ms = int((time.monotonic() - started) * 1000)
-
-        # Bei aktiviertem Thinking enthaelt response.content zusaetzlich einen
-        # thinking-Block vor dem eigentlichen Text - hier bewusst ignoriert,
-        # da nur "text"-Bloecke als Antwort zaehlen.
-        text = "".join(block.text for block in response.content if getattr(block, "type", None) == "text")
         usage = LangdockUsage(
             model=model,
             input_tokens=getattr(response.usage, "input_tokens", None),
@@ -171,6 +177,16 @@ class LangdockClient:
             status_code=200,
             stop_reason=getattr(response, "stop_reason", None),
         )
+        return response, usage
+
+    def _generate(
+        self, tier: ModelTier, system: str, user_message: str, max_tokens: int, enable_thinking: bool = False
+    ) -> LangdockTextResponse:
+        response, usage = self._call_messages(tier, system, user_message, max_tokens, enable_thinking=enable_thinking)
+        # Bei aktiviertem Thinking enthaelt response.content zusaetzlich einen
+        # thinking-Block vor dem eigentlichen Text - hier bewusst ignoriert,
+        # da nur "text"-Bloecke als Antwort zaehlen.
+        text = "".join(block.text for block in response.content if getattr(block, "type", None) == "text")
         return LangdockTextResponse(text=text, usage=usage)
 
     def generate_sonnet(self, system: str, user_message: str, max_tokens: int = 2048) -> LangdockTextResponse:
@@ -217,6 +233,41 @@ class LangdockClient:
                 usage=response.usage,
             )
         return parsed, response.usage
+
+    def tool_output(
+        self, tier: ModelTier, system: str, user_message: str, tool: dict[str, Any], max_tokens: int
+    ) -> tuple[dict[str, Any], LangdockUsage]:
+        """Forces the model to answer via native Anthropic tool-use (`tool_choice`)
+        instead of a free-text "return JSON" instruction.
+
+        Anthropic parses/validates the tool-call arguments server-side against
+        `tool["input_schema"]`, so `block.input` is already a Python dict - no
+        `json.loads()` on model-generated text, which structurally avoids the
+        broken-escaping failure class free-text JSON is prone to (unescaped
+        quotes/newlines from quoted source material breaking the JSON string).
+        """
+        tool_choice = {"type": "tool", "name": tool["name"]}
+        response, usage = self._call_messages(
+            tier, system, user_message, max_tokens, tools=[tool], tool_choice=tool_choice
+        )
+        if usage.stop_reason == "max_tokens":
+            raise ResponseTruncatedError(
+                f"Langdock tool-call response was cut off at max_tokens={max_tokens} (stop_reason=max_tokens).",
+                stop_reason="max_tokens",
+                usage=usage,
+            )
+        tool_use_blocks = [block for block in response.content if getattr(block, "type", None) == "tool_use"]
+        if not tool_use_blocks:
+            raise ValueError(
+                f"Langdock model did not return a tool_use block for tool={tool['name']!r} "
+                f"(stop_reason={usage.stop_reason!r})"
+            )
+        tool_input = tool_use_blocks[0].input
+        if not isinstance(tool_input, dict):
+            raise ValueError(
+                f"Langdock tool_use.input for tool={tool['name']!r} was not a JSON object: {tool_input!r}"
+            )
+        return tool_input, usage
 
     def embed(self, texts: list[str]) -> LangdockEmbeddingResponse:
         """Langdock OpenAI-compatible embeddings (architecture doc §7.3).
