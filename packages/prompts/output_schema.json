@@ -1,0 +1,21 @@
+{
+  "answer": "string",
+  "citations": [
+    {
+      "source_id": "string",
+      "chunk_id": "string",
+      "document_name": "string",
+      "page_start": 1,
+      "page_end": 1,
+      "quote": "string",
+      "supports_claim": "string"
+    }
+  ],
+  "confidence": "low | medium | high",
+  "missing_information": [
+    "string"
+  ],
+  "follow_up_questions": [
+    "string"
+  ]
+}

@@ -1,0 +1,168 @@
+"""Langdock gateway client - worker side.
+
+Mirrors apps/api/app/langdock/client.py (see that file's docstring and the
+implementation plan's "Empfehlung Code-Sharing" note on why this is
+duplicated rather than imported from a shared package). The worker mainly
+needs `embed()`; `generate_haiku`/`generate_sonnet` are included for the
+MVP2 source-summary job (app.summaries.source_summary).
+"""
+import json
+import time
+from dataclasses import dataclass, field
+from functools import lru_cache
+from typing import Any, Literal
+
+from anthropic import Anthropic, APIStatusError
+from openai import OpenAI
+from tenacity import retry, retry_if_exception_type, stop_after_attempt
+from tenacity.wait import wait_base
+
+from app.core.config import get_settings
+from app.core.logging import get_logger
+
+logger = get_logger(__name__)
+
+ModelTier = Literal["sonnet", "haiku"]
+
+
+@dataclass
+class LangdockUsage:
+    model: str
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    total_tokens: int | None = None
+    latency_ms: int | None = None
+    status_code: int | None = None
+    error_message: str | None = None
+
+
+@dataclass
+class LangdockTextResponse:
+    text: str
+    usage: LangdockUsage
+
+
+@dataclass
+class LangdockEmbeddingResponse:
+    vectors: list[list[float]]
+    usage: LangdockUsage = field(default_factory=lambda: LangdockUsage(model=""))
+
+
+class RateLimitedError(Exception):
+    pass
+
+
+class _VariableWait(wait_base):
+    def __init__(self, backoffs: list[int]) -> None:
+        self._backoffs = backoffs
+
+    def __call__(self, retry_state) -> float:
+        attempt = retry_state.attempt_number - 1
+        return self._backoffs[min(attempt, len(self._backoffs) - 1)]
+
+
+class LangdockClient:
+    def __init__(self) -> None:
+        settings = get_settings()
+        self._settings = settings
+
+        if not settings.langdock_api_key:
+            logger.warning("LANGDOCK_API_KEY is empty - Langdock calls will fail until it is set in .env")
+
+        self._anthropic = Anthropic(api_key=settings.langdock_api_key or "unset", base_url=settings.langdock_anthropic_base_url)
+        self._openai = OpenAI(api_key=settings.langdock_api_key or "unset", base_url=settings.embedding_base_url)
+
+    def _model_for(self, tier: ModelTier) -> str:
+        model = self._settings.langdock_primary_model if tier == "sonnet" else self._settings.langdock_fast_model
+        if not model:
+            raise RuntimeError(
+                f"No Langdock model id configured for tier={tier!r}. Set LANGDOCK_PRIMARY_MODEL / "
+                f"LANGDOCK_FAST_MODEL in .env (see docs/langdock.md)."
+            )
+        return model
+
+    def _retry_decorator(self):
+        backoffs = self._settings.retry_backoff_seconds or [5, 15, 30, 60]
+        return retry(
+            reraise=True,
+            retry=retry_if_exception_type(RateLimitedError),
+            stop=stop_after_attempt(len(backoffs) + 1),
+            wait=_VariableWait(backoffs),
+        )
+
+    def _generate(self, tier: ModelTier, system: str, user_message: str, max_tokens: int) -> LangdockTextResponse:
+        model = self._model_for(tier)
+        started = time.monotonic()
+
+        @self._retry_decorator()
+        def _call():
+            try:
+                return self._anthropic.messages.create(
+                    model=model, max_tokens=max_tokens, system=system, messages=[{"role": "user", "content": user_message}]
+                )
+            except APIStatusError as exc:
+                if exc.status_code == 429:
+                    raise RateLimitedError(str(exc)) from exc
+                raise
+
+        response = _call()
+        latency_ms = int((time.monotonic() - started) * 1000)
+        text = "".join(block.text for block in response.content if getattr(block, "type", None) == "text")
+        usage = LangdockUsage(
+            model=model,
+            input_tokens=getattr(response.usage, "input_tokens", None),
+            output_tokens=getattr(response.usage, "output_tokens", None),
+            latency_ms=latency_ms,
+            status_code=200,
+        )
+        return LangdockTextResponse(text=text, usage=usage)
+
+    def generate_haiku(self, system: str, user_message: str, max_tokens: int = 512) -> LangdockTextResponse:
+        return self._generate("haiku", system, user_message, max_tokens)
+
+    def generate_sonnet(self, system: str, user_message: str, max_tokens: int = 2048) -> LangdockTextResponse:
+        return self._generate("sonnet", system, user_message, max_tokens)
+
+    def structured_output(self, tier: ModelTier, system: str, user_message: str, max_tokens: int = 2048) -> tuple[dict[str, Any], LangdockUsage]:
+        response = self._generate(tier, system, user_message, max_tokens)
+        raw = response.text.strip()
+        if raw.startswith("```"):
+            raw = raw.strip("`")
+            if raw.lower().startswith("json"):
+                raw = raw[4:]
+        try:
+            return json.loads(raw), response.usage
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Langdock model did not return valid JSON: {exc}\nRaw: {raw[:500]}") from exc
+
+    def embed(self, texts: list[str]) -> LangdockEmbeddingResponse:
+        settings = self._settings
+        started = time.monotonic()
+
+        @self._retry_decorator()
+        def _call():
+            try:
+                return self._openai.embeddings.create(
+                    model=settings.embedding_model, input=texts, encoding_format=settings.embedding_encoding_format
+                )
+            except Exception as exc:
+                if "429" in str(exc) or exc.__class__.__name__ == "RateLimitError":
+                    raise RateLimitedError(str(exc)) from exc
+                raise
+
+        response = _call()
+        latency_ms = int((time.monotonic() - started) * 1000)
+        vectors = [item.embedding for item in response.data]
+        usage = LangdockUsage(
+            model=settings.embedding_model,
+            input_tokens=getattr(response.usage, "prompt_tokens", None) if response.usage else None,
+            total_tokens=getattr(response.usage, "total_tokens", None) if response.usage else None,
+            latency_ms=latency_ms,
+            status_code=200,
+        )
+        return LangdockEmbeddingResponse(vectors=vectors, usage=usage)
+
+
+@lru_cache
+def get_langdock_client() -> LangdockClient:
+    return LangdockClient()

@@ -1,0 +1,105 @@
+"""Main document processing job (architecture doc §14.3 pipeline):
+
+Upload -> MinIO (already done by the API) -> [this job] -> parse -> chunk
+-> Langdock embeddings -> Qdrant upsert -> source.status = indexed
+
+RQ calls this function by its dotted path (see apps/api/app/jobs/queue.py).
+Each step below is implemented in its own module; this function only owns
+orchestration, status transitions and error handling.
+"""
+from app.chunking.chunker import chunk_sections
+from app.core.logging import get_logger
+from app.db.session import session_scope
+from app.embeddings.langdock_embeddings import embed_texts
+from app.indexing.qdrant_indexer import index_chunks
+from app.jobs.status import get_job, get_source, mark_job_completed, mark_job_failed, mark_job_running, set_source_status
+from app.parsing.registry import parse_document
+from app.storage.minio_client import download_bytes
+
+logger = get_logger(__name__)
+
+
+def process_source(db_job_id: str, source_id: str, notebook_id: str) -> None:
+    job_id = db_job_id
+    with session_scope() as db:
+        job = get_job(db, job_id)
+        source = get_source(db, source_id)
+        mark_job_running(db, job)
+        set_source_status(db, source, "processing")
+
+    try:
+        _run_pipeline(source_id=source_id, notebook_id=notebook_id)
+        with session_scope() as db:
+            job = get_job(db, job_id)
+            source = get_source(db, source_id)
+            mark_job_completed(db, job)
+            set_source_status(db, source, "indexed")
+        logger.info("source %s indexed successfully", source_id)
+    except Exception as exc:  # noqa: BLE001 - we want to persist any failure
+        logger.exception("processing source %s failed", source_id)
+        with session_scope() as db:
+            job = get_job(db, job_id)
+            source = get_source(db, source_id)
+            mark_job_failed(db, job, str(exc))
+            set_source_status(db, source, "failed", error_message=str(exc))
+        raise
+
+
+def _run_pipeline(source_id: str, notebook_id: str) -> None:
+    with session_scope() as db:
+        source = get_source(db, source_id)
+        storage_path = source.storage_path
+        mime_type = source.mime_type
+        original_filename = source.original_filename
+
+    raw_bytes = download_bytes(storage_path)
+    sections = parse_document(mime_type=mime_type, filename=original_filename, data=raw_bytes)
+    chunk_drafts = chunk_sections(sections)
+
+    if not chunk_drafts:
+        logger.warning("no chunks produced for source %s", source_id)
+        return
+
+    vectors = embed_texts([c.text for c in chunk_drafts])
+
+    with session_scope() as db:
+        from app.db import models
+        import uuid
+
+        source = get_source(db, source_id)
+        db_chunks = []
+        for idx, draft in enumerate(chunk_drafts):
+            chunk = models.Chunk(
+                notebook_id=uuid.UUID(notebook_id),
+                source_id=uuid.UUID(source_id),
+                chunk_index=idx,
+                chunk_type=draft.chunk_type,
+                page_start=draft.page_start,
+                page_end=draft.page_end,
+                heading=draft.heading,
+                text=draft.text,
+                metadata_json=draft.metadata,
+            )
+            db.add(chunk)
+            db_chunks.append(chunk)
+        db.commit()
+        for chunk in db_chunks:
+            db.refresh(chunk)
+
+        point_ids = index_chunks(
+            notebook_id=notebook_id,
+            source_id=source_id,
+            document_name=original_filename,
+            chunks=db_chunks,
+            vectors=vectors,
+        )
+        for chunk, point_id in zip(db_chunks, point_ids):
+            chunk.qdrant_point_id = point_id
+        source.page_count = _max_page(chunk_drafts)
+        source.token_count = sum(len(c.text.split()) for c in chunk_drafts)
+        db.commit()
+
+
+def _max_page(chunk_drafts: list) -> int | None:
+    pages = [c.page_end for c in chunk_drafts if c.page_end is not None]
+    return max(pages) if pages else None

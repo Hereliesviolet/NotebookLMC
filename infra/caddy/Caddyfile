@@ -1,0 +1,61 @@
+# =============================================================================
+# Caddyfile - NotebookLM Clone Reverse Proxy
+# =============================================================================
+# Local development default: serve everything on :80 without a real domain.
+# Caddy still terminates all traffic centrally, so swapping in a real domain
+# later (see the production block below) is a one-line change.
+#
+# Routing rule (single-domain variant, per architecture doc §11):
+#   /api/*  -> api:8000
+#   /*      -> frontend:3000
+# =============================================================================
+
+:80 {
+	encode gzip
+
+	handle /api/* {
+		reverse_proxy api:8000
+	}
+
+	handle {
+		reverse_proxy frontend:3000
+	}
+
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+}
+
+# -----------------------------------------------------------------------------
+# Production example (real domain, automatic HTTPS via Caddy/ACME):
+#
+# notebook.example.de {
+# 	encode gzip
+#
+# 	handle /api/* {
+# 		reverse_proxy api:8000
+# 	}
+#
+# 	handle {
+# 		reverse_proxy frontend:3000
+# 	}
+#
+# 	header {
+# 		X-Content-Type-Options nosniff
+# 		X-Frame-Options DENY
+# 		Referrer-Policy strict-origin-when-cross-origin
+# 	}
+# }
+#
+# Separate-subdomain variant:
+#
+# notebook.example.de {
+# 	reverse_proxy frontend:3000
+# }
+#
+# notebook-api.example.de {
+# 	reverse_proxy api:8000
+# }
+# -----------------------------------------------------------------------------

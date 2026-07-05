@@ -1,0 +1,23 @@
+{
+  "description": "Erwartete Antwort-Eigenschaften je Frage aus questions.json. Dient als Referenz für ein zukünftiges Eval-Skript (z. B. packages/evals/run_eval.py), das answer/citations/confidence gegen diese Erwartungen prüft. Kein automatisierter String-Vergleich der Freitext-Antwort - stattdessen Prüfung auf erwartete Zitat-Quellen und Confidence-Niveau.",
+  "answers": [
+    {
+      "id": "q1",
+      "must_cite_source_ids": ["TODO: echte Source-ID einsetzen"],
+      "min_confidence": "medium",
+      "notes": "Antwort muss mindestens ein Zitat aus der erwarteten Quelle enthalten."
+    },
+    {
+      "id": "q2",
+      "must_cite_source_ids": ["TODO: echte Source-ID einsetzen"],
+      "min_confidence": "medium",
+      "notes": "Antwort sollte konkrete Zahlen aus der Tabellen-Quelle nennen."
+    },
+    {
+      "id": "q3",
+      "must_cite_source_ids": [],
+      "min_confidence": "low",
+      "notes": "Modell soll fehlende Informationen benennen statt zu halluzinieren (missing_information darf nicht leer sein)."
+    }
+  ]
+}

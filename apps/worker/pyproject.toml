@@ -1,0 +1,13 @@
+[project]
+name = "notebooklmc-worker"
+version = "0.1.0"
+description = "NotebookLM Clone - Python worker (parsing, chunking, embeddings, Qdrant indexing)"
+requires-python = ">=3.11"
+readme = "README.md"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
