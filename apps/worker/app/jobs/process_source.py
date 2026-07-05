@@ -7,16 +7,30 @@ RQ calls this function by its dotted path (see apps/api/app/jobs/queue.py).
 Each step below is implemented in its own module; this function only owns
 orchestration, status transitions and error handling.
 """
+import uuid
+
+from sqlalchemy.orm import Session
+
 from app.chunking.chunker import chunk_sections
 from app.core.logging import get_logger
+from app.db import models
 from app.db.session import session_scope
 from app.embeddings.langdock_embeddings import embed_texts
 from app.indexing.qdrant_indexer import index_chunks
 from app.jobs.status import get_job, get_source, mark_job_completed, mark_job_failed, mark_job_running, set_source_status
 from app.parsing.registry import parse_document
+from app.qdrant.client import delete_points_by_source
 from app.storage.minio_client import download_bytes
 
 logger = get_logger(__name__)
+
+
+def _delete_existing_chunks(db: Session, source_id: str) -> None:
+    """Removes chunk rows from a previous run before inserting the fresh set,
+    so reprocessing a source never accumulates duplicate/stale chunks
+    (regardless of whether that previous run succeeded or failed midway).
+    """
+    db.query(models.Chunk).filter(models.Chunk.source_id == uuid.UUID(source_id)).delete()
 
 
 def process_source(db_job_id: str, source_id: str, notebook_id: str) -> None:
@@ -58,15 +72,21 @@ def _run_pipeline(source_id: str, notebook_id: str) -> None:
 
     if not chunk_drafts:
         logger.warning("no chunks produced for source %s", source_id)
+        with session_scope() as db:
+            source = get_source(db, source_id)
+            _delete_existing_chunks(db, source_id)
+            delete_points_by_source(source_id)
+            source.page_count = None
+            source.token_count = 0
         return
 
     vectors = embed_texts([c.text for c in chunk_drafts])
 
     with session_scope() as db:
-        from app.db import models
-        import uuid
-
         source = get_source(db, source_id)
+
+        _delete_existing_chunks(db, source_id)
+
         db_chunks = []
         for idx, draft in enumerate(chunk_drafts):
             chunk = models.Chunk(
@@ -82,10 +102,12 @@ def _run_pipeline(source_id: str, notebook_id: str) -> None:
             )
             db.add(chunk)
             db_chunks.append(chunk)
-        db.commit()
-        for chunk in db_chunks:
-            db.refresh(chunk)
+        db.flush()  # assigns chunk.id (client-side uuid4 default) without committing yet
 
+        # Remove any points left over from a previous run (e.g. different chunk
+        # count/ids) before upserting the fresh set, so reprocessing never
+        # leaves orphaned vectors in Qdrant.
+        delete_points_by_source(source_id)
         point_ids = index_chunks(
             notebook_id=notebook_id,
             source_id=source_id,
@@ -97,7 +119,6 @@ def _run_pipeline(source_id: str, notebook_id: str) -> None:
             chunk.qdrant_point_id = point_id
         source.page_count = _max_page(chunk_drafts)
         source.token_count = sum(len(c.text.split()) for c in chunk_drafts)
-        db.commit()
 
 
 def _max_page(chunk_drafts: list) -> int | None:

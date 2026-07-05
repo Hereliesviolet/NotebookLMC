@@ -10,6 +10,7 @@ from qdrant_client.http import models as qmodels
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
+from app.parsing.sanitize import sanitize_text
 from app.qdrant.client import ensure_collection, get_qdrant_client
 
 logger = get_logger(__name__)
@@ -31,6 +32,7 @@ def index_chunks(notebook_id: str, source_id: str, document_name: str, chunks: l
     client = get_qdrant_client()
     ensure_collection(client)
 
+    document_name = sanitize_text(document_name)
     points: list[qmodels.PointStruct] = []
     point_ids: list[str] = []
 

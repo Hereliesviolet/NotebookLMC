@@ -3,6 +3,7 @@ import io
 
 from docx import Document
 
+from app.parsing.sanitize import sanitize_text
 from app.parsing.types import ParsedSection
 
 _HEADING_STYLES = {"Title", "Heading 1", "Heading 2", "Heading 3", "Heading 4"}
@@ -15,13 +16,13 @@ def parse_docx(data: bytes) -> list[ParsedSection]:
     buffer: list[str] = []
 
     def flush() -> None:
-        text = "\n".join(buffer).strip()
+        text = sanitize_text("\n".join(buffer)).strip()
         if text:
             sections.append(ParsedSection(text=text, heading=current_heading, chunk_type="text"))
         buffer.clear()
 
     for paragraph in document.paragraphs:
-        text = paragraph.text.strip()
+        text = sanitize_text(paragraph.text).strip()
         if not text:
             continue
         if paragraph.style and paragraph.style.name in _HEADING_STYLES:
@@ -32,7 +33,10 @@ def parse_docx(data: bytes) -> list[ParsedSection]:
     flush()
 
     for table in document.tables:
-        rows = ["| " + " | ".join(cell.text.strip() for cell in row.cells) + " |" for row in table.rows]
+        rows = [
+            "| " + " | ".join(sanitize_text(cell.text).strip() for cell in row.cells) + " |"
+            for row in table.rows
+        ]
         if rows:
             sections.append(
                 ParsedSection(text="\n".join(rows), heading=current_heading, chunk_type="table")

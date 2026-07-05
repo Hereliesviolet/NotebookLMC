@@ -83,6 +83,11 @@ class Settings(BaseSettings):
     enable_intent_detection: bool = False
     enable_query_rewrite: bool = False
 
+    # Token-Budget fuer die finale Sonnet-Antwort (chat/service.py answer_question).
+    # Bei stop_reason="max_tokens" wird einmalig mit dem doppelten Budget retried
+    # (siehe langdock/client.py ResponseTruncatedError).
+    chat_answer_max_tokens: int = 4096
+
     @property
     def database_url(self) -> str:
         return (

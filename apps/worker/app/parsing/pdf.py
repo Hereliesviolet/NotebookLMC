@@ -7,6 +7,7 @@ import io
 
 from pypdf import PdfReader
 
+from app.parsing.sanitize import sanitize_text
 from app.parsing.types import ParsedSection
 
 
@@ -14,7 +15,7 @@ def parse_pdf(data: bytes) -> list[ParsedSection]:
     reader = PdfReader(io.BytesIO(data))
     sections: list[ParsedSection] = []
     for page_index, page in enumerate(reader.pages, start=1):
-        text = (page.extract_text() or "").strip()
+        text = sanitize_text(page.extract_text() or "").strip()
         if not text:
             continue
         sections.append(ParsedSection(text=text, page_start=page_index, page_end=page_index, chunk_type="text"))

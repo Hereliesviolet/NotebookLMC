@@ -60,6 +60,7 @@ class LangdockUsage:
     latency_ms: int | None = None
     status_code: int | None = None
     error_message: str | None = None
+    stop_reason: str | None = None
 
 
 @dataclass
@@ -76,6 +77,21 @@ class LangdockEmbeddingResponse:
 
 class RateLimitedError(Exception):
     """Raised on Langdock 429s so tenacity can retry with backoff."""
+
+
+class ResponseTruncatedError(Exception):
+    """Raised when a structured_output() response was cut off before completion.
+
+    Triggered either by Anthropic's stop_reason=="max_tokens", or by a
+    JSON parse failure on the (in that case near-certainly truncated) raw
+    text - distinct from RateLimitedError/auth/network failures so callers
+    can offer a specific "answer too long" message instead of a generic one.
+    """
+
+    def __init__(self, message: str, stop_reason: str | None, usage: "LangdockUsage | None" = None) -> None:
+        super().__init__(message)
+        self.stop_reason = stop_reason
+        self.usage = usage
 
 
 class LangdockClient:
@@ -153,6 +169,7 @@ class LangdockClient:
             + (getattr(response.usage, "output_tokens", 0) or 0),
             latency_ms=latency_ms,
             status_code=200,
+            stop_reason=getattr(response, "stop_reason", None),
         )
         return LangdockTextResponse(text=text, usage=usage)
 
@@ -182,9 +199,24 @@ class LangdockClient:
             if raw.lower().startswith("json"):
                 raw = raw[4:]
         try:
-            return json.loads(raw), response.usage
+            parsed = json.loads(raw)
         except json.JSONDecodeError as exc:
-            raise ValueError(f"Langdock model did not return valid JSON: {exc}\nRaw: {raw[:500]}") from exc
+            # A malformed JSON body is near-certainly caused by the response
+            # being cut off mid-generation - treat it as truncation even if
+            # stop_reason wasn't (yet) reported as "max_tokens".
+            raise ResponseTruncatedError(
+                f"Langdock model returned invalid/truncated JSON (stop_reason={response.usage.stop_reason!r}): "
+                f"{exc}\nRaw: {raw[:500]}",
+                stop_reason=response.usage.stop_reason,
+                usage=response.usage,
+            ) from exc
+        if response.usage.stop_reason == "max_tokens":
+            raise ResponseTruncatedError(
+                f"Langdock model response was cut off at max_tokens={max_tokens} (stop_reason=max_tokens).",
+                stop_reason="max_tokens",
+                usage=response.usage,
+            )
+        return parsed, response.usage
 
     def embed(self, texts: list[str]) -> LangdockEmbeddingResponse:
         """Langdock OpenAI-compatible embeddings (architecture doc §7.3).

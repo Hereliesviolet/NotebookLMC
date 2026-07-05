@@ -12,6 +12,7 @@ later if exact token budgets become important):
 """
 from dataclasses import dataclass, field
 
+from app.parsing.sanitize import sanitize_text
 from app.parsing.types import ParsedSection
 
 MIN_WORDS = 450
@@ -46,20 +47,23 @@ def chunk_sections(sections: list[ParsedSection]) -> list[ChunkDraft]:
     drafts: list[ChunkDraft] = []
 
     for section in sections:
+        text = sanitize_text(section.text) or ""
+        heading = sanitize_text(section.heading)
+
         if section.chunk_type != "text":
             drafts.append(
                 ChunkDraft(
-                    text=section.text,
+                    text=text,
                     chunk_type=section.chunk_type,
                     page_start=section.page_start,
                     page_end=section.page_end,
-                    heading=section.heading,
+                    heading=heading,
                     metadata=section.metadata,
                 )
             )
             continue
 
-        words = section.text.split()
+        words = text.split()
         if not words:
             continue
 
@@ -70,7 +74,7 @@ def chunk_sections(sections: list[ParsedSection]) -> list[ChunkDraft]:
                     chunk_type="text",
                     page_start=section.page_start,
                     page_end=section.page_end,
-                    heading=section.heading,
+                    heading=heading,
                     metadata=section.metadata,
                 )
             )

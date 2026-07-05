@@ -5,20 +5,21 @@ chunking can attach a meaningful `heading` to each chunk.
 """
 import re
 
+from app.parsing.sanitize import sanitize_text
 from app.parsing.types import ParsedSection
 
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)$")
 
 
 def parse_text(data: bytes) -> list[ParsedSection]:
-    text = data.decode("utf-8", errors="replace").strip()
+    text = sanitize_text(data.decode("utf-8", errors="replace")).strip()
     if not text:
         return []
     return [ParsedSection(text=text, chunk_type="text")]
 
 
 def parse_markdown(data: bytes) -> list[ParsedSection]:
-    text = data.decode("utf-8", errors="replace")
+    text = sanitize_text(data.decode("utf-8", errors="replace"))
     lines = text.splitlines()
 
     sections: list[ParsedSection] = []

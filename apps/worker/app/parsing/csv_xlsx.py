@@ -8,6 +8,7 @@ import io
 
 import pandas as pd
 
+from app.parsing.sanitize import sanitize_text
 from app.parsing.types import ParsedSection
 
 _ROWS_PER_CHUNK = 50
@@ -18,10 +19,10 @@ def _dataframe_to_sections(df: "pd.DataFrame", sheet_name: str | None = None) ->
     total_rows = len(df)
     for start in range(0, total_rows, _ROWS_PER_CHUNK):
         batch = df.iloc[start : start + _ROWS_PER_CHUNK]
-        heading = sheet_name if sheet_name else None
+        heading = sanitize_text(sheet_name) if sheet_name else None
         sections.append(
             ParsedSection(
-                text=batch.to_markdown(index=False),
+                text=sanitize_text(batch.to_markdown(index=False)),
                 heading=heading,
                 chunk_type="table",
                 metadata={"row_start": start, "row_end": min(start + _ROWS_PER_CHUNK, total_rows) - 1},

@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.db import models
-from app.langdock.client import get_langdock_client
+from app.langdock.client import ResponseTruncatedError, get_langdock_client
 from app.langdock.prompts_loader import load_output_schema, load_prompt
 from app.rag import query_understanding
 from app.rag.citation_validation import downgrade_confidence_if_unsupported, validate_citations
@@ -87,19 +87,56 @@ async def answer_question(
         f"Quellenkontext:\n{context}"
     )
 
+    answer_max_tokens = settings.chat_answer_max_tokens
     try:
-        raw, usage = client.structured_output("sonnet", system_prompt, user_message, max_tokens=2048)
+        raw, usage = client.structured_output("sonnet", system_prompt, user_message, max_tokens=answer_max_tokens)
+    except ResponseTruncatedError as exc:
+        retry_max_tokens = answer_max_tokens * 2
+        logger.warning(
+            "Sonnet answer truncated (stop_reason=%s) for notebook=%s, retrying once with max_tokens=%s",
+            exc.stop_reason,
+            notebook_id,
+            retry_max_tokens,
+        )
+        try:
+            raw, usage = client.structured_output(
+                "sonnet", system_prompt, user_message, max_tokens=retry_max_tokens
+            )
+        except ResponseTruncatedError as retry_exc:
+            logger.error(
+                "Sonnet answer still truncated after retry (max_tokens=%s) for notebook=%s: %s",
+                retry_max_tokens,
+                notebook_id,
+                retry_exc,
+            )
+            return await _persist_and_return(
+                db,
+                notebook_id,
+                user_id,
+                answer=(
+                    "Die Antwort war zu lang und wurde abgeschnitten - bitte stelle eine "
+                    "präzisere oder engere Frage."
+                ),
+                missing_information=[f"Antwort auch nach Retry mit max_tokens={retry_max_tokens} abgeschnitten: {retry_exc}"],
+            )
+        except Exception as retry_exc:
+            logger.exception("Sonnet answer generation failed on retry for notebook=%s", notebook_id)
+            return await _persist_and_return(
+                db,
+                notebook_id,
+                user_id,
+                answer="Die Antwortgenerierung ist derzeit nicht verfügbar. Bitte versuche es später erneut.",
+                missing_information=[f"Langdock-Fehler: {retry_exc}"],
+            )
     except Exception as exc:
         logger.exception("Sonnet answer generation failed for notebook=%s", notebook_id)
-        response = ChatResponse(
+        return await _persist_and_return(
+            db,
+            notebook_id,
+            user_id,
             answer="Die Antwortgenerierung ist derzeit nicht verfügbar. Bitte versuche es später erneut.",
-            citations=[],
-            confidence="low",
             missing_information=[f"Langdock-Fehler: {exc}"],
-            follow_up_questions=[],
         )
-        await _persist_assistant_message(db, notebook_id, user_id, response, model=None)
-        return response
 
     validated_citations = await validate_citations(db, notebook_id, raw.get("citations") or [])
     confidence = downgrade_confidence_if_unsupported(raw.get("confidence", "medium"), len(validated_citations))
@@ -113,6 +150,24 @@ async def answer_question(
     )
     await _persist_assistant_message(db, notebook_id, user_id, response, model=usage.model)
     await _log_langdock_request(db, notebook_id, user_id, usage)
+    return response
+
+
+async def _persist_and_return(
+    db: AsyncSession,
+    notebook_id: str,
+    user_id: str,
+    answer: str,
+    missing_information: list[str],
+) -> ChatResponse:
+    response = ChatResponse(
+        answer=answer,
+        citations=[],
+        confidence="low",
+        missing_information=missing_information,
+        follow_up_questions=[],
+    )
+    await _persist_assistant_message(db, notebook_id, user_id, response, model=None)
     return response
 
 

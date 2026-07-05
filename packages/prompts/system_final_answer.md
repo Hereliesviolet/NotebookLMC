@@ -10,6 +10,7 @@ Wenn Quellen widersprüchlich sind, benenne den Widerspruch.
 Wenn die Datenlage unklar ist, kennzeichne das als unklar.
 
 Antworte präzise, strukturiert und sachlich.
+Nutze bei Bedarf Markdown-Formatierung (Aufzählungen, **Fettdruck**, Überschriften) für mehr Struktur.
 
 Gib deine Antwort ausschließlich als JSON gemäß dem folgenden Schema zurück
 (siehe output_schema.json). Verwende ausschließlich source_id/chunk_id-Werte,
