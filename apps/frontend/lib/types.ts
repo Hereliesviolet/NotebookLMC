@@ -15,7 +15,7 @@ export interface Notebook {
   updated_at: string;
 }
 
-export type SourceStatus = "uploaded" | "processing" | "indexed" | "failed" | "deleted";
+export type SourceStatus = "uploaded" | "processing" | "indexed" | "failed" | "no_content" | "deleted";
 
 export interface Source {
   id: string;

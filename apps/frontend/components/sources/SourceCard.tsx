@@ -19,7 +19,11 @@ export function SourceCard({ source, onDelete }: SourceCardProps) {
           <p className="truncate text-sm font-medium" title={source.original_filename}>
             {source.original_filename}
           </p>
-          {source.error_message && <p className="truncate text-xs text-red-600">{source.error_message}</p>}
+          {source.error_message && (
+            <p className="truncate text-xs text-red-600" title={source.error_message}>
+              {source.error_message}
+            </p>
+          )}
         </div>
       </div>
       <div className="flex flex-shrink-0 items-center gap-2">

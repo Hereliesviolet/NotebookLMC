@@ -57,6 +57,9 @@ class Settings(BaseSettings):
     worker_default_concurrency: int = 2
     langdock_retry_backoff_seconds: str = "5,15,30,60"
 
+    # OCR fallback for scanned PDFs without a text layer (Claude Vision via Langdock)
+    pdf_ocr_fallback_enabled: bool = True
+
     @property
     def sync_database_url(self) -> str:
         return (

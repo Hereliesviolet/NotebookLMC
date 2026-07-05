@@ -17,7 +17,15 @@ from app.db import models
 from app.db.session import session_scope
 from app.embeddings.langdock_embeddings import embed_texts
 from app.indexing.qdrant_indexer import index_chunks
-from app.jobs.status import get_job, get_source, mark_job_completed, mark_job_failed, mark_job_running, set_source_status
+from app.jobs.status import (
+    get_job,
+    get_source,
+    mark_job_completed,
+    mark_job_failed,
+    mark_job_running,
+    mark_source_no_content,
+    set_source_status,
+)
 from app.parsing.registry import parse_document
 from app.qdrant.client import delete_points_by_source
 from app.storage.minio_client import download_bytes
@@ -42,13 +50,16 @@ def process_source(db_job_id: str, source_id: str, notebook_id: str) -> None:
         set_source_status(db, source, "processing")
 
     try:
-        _run_pipeline(source_id=source_id, notebook_id=notebook_id)
+        has_content = _run_pipeline(source_id=source_id, notebook_id=notebook_id)
         with session_scope() as db:
             job = get_job(db, job_id)
             source = get_source(db, source_id)
             mark_job_completed(db, job)
-            set_source_status(db, source, "indexed")
-        logger.info("source %s indexed successfully", source_id)
+            if has_content:
+                set_source_status(db, source, "indexed")
+            else:
+                mark_source_no_content(db, source)
+        logger.info("source %s processed (has_content=%s)", source_id, has_content)
     except Exception as exc:  # noqa: BLE001 - we want to persist any failure
         logger.exception("processing source %s failed", source_id)
         with session_scope() as db:
@@ -59,7 +70,11 @@ def process_source(db_job_id: str, source_id: str, notebook_id: str) -> None:
         raise
 
 
-def _run_pipeline(source_id: str, notebook_id: str) -> None:
+def _run_pipeline(source_id: str, notebook_id: str) -> bool:
+    """Returns whether the source produced indexable content (chunks/points).
+    `False` means parsing (incl. OCR fallback) ran without error but yielded
+    nothing - the caller marks the source `"no_content"` instead of `"indexed"`.
+    """
     with session_scope() as db:
         source = get_source(db, source_id)
         storage_path = source.storage_path
@@ -78,7 +93,7 @@ def _run_pipeline(source_id: str, notebook_id: str) -> None:
             delete_points_by_source(source_id)
             source.page_count = None
             source.token_count = 0
-        return
+        return False
 
     vectors = embed_texts([c.text for c in chunk_drafts])
 
@@ -119,6 +134,8 @@ def _run_pipeline(source_id: str, notebook_id: str) -> None:
             chunk.qdrant_point_id = point_id
         source.page_count = _max_page(chunk_drafts)
         source.token_count = sum(len(c.text.split()) for c in chunk_drafts)
+
+    return True
 
 
 def _max_page(chunk_drafts: list) -> int | None:

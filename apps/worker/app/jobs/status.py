@@ -50,3 +50,16 @@ def set_source_status(db: Session, source: models.Source, status: str, error_mes
     source.status = status
     source.error_message = error_message[:4000] if error_message else None
     db.commit()
+
+
+NO_CONTENT_MESSAGE = (
+    "Kein Text erkannt (auch nach OCR-Versuch) - Dokument enthält evtl. keine lesbaren Inhalte."
+)
+
+
+def mark_source_no_content(db: Session, source: models.Source) -> None:
+    """Distinct from `"failed"`: parsing/OCR ran without error, but produced
+    zero usable chunks (e.g. a blank/unreadable page) - so callers/the UI can
+    tell "processing crashed" apart from "nothing to index in this file".
+    """
+    set_source_status(db, source, "no_content", error_message=NO_CONTENT_MESSAGE)

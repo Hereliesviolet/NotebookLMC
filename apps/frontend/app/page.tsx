@@ -45,7 +45,11 @@ export default function NotebooksPage() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {notebooks.map((notebook) => (
-          <NotebookCard key={notebook.id} notebook={notebook} />
+          <NotebookCard
+            key={notebook.id}
+            notebook={notebook}
+            onDelete={(id) => setNotebooks((prev) => prev.filter((n) => n.id !== id))}
+          />
         ))}
       </div>
 

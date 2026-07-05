@@ -6,6 +6,7 @@ const LABELS: Record<SourceStatus, string> = {
   processing: "Wird verarbeitet",
   indexed: "Indexiert",
   failed: "Fehlgeschlagen",
+  no_content: "Kein Text erkannt",
   deleted: "Gelöscht",
 };
 
@@ -14,6 +15,7 @@ const VARIANTS: Record<SourceStatus, "default" | "success" | "warning" | "destru
   processing: "warning",
   indexed: "success",
   failed: "destructive",
+  no_content: "destructive",
   deleted: "muted",
 };
 

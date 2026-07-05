@@ -8,6 +8,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
