@@ -255,7 +255,7 @@ function StudioArtifactContent({
     case "quiz":
       return <StudioQuizView key={renderRefreshKey} content={content as StudioQuizContent} />;
     case "mindmap":
-      return <StudioMindmapView content={content as StudioMindmapContent} />;
+      return <StudioMindmapView key={renderRefreshKey} content={content as StudioMindmapContent} />;
     case "infographic":
       return <StudioInfographicView content={content as StudioInfographicContent} />;
     default:
