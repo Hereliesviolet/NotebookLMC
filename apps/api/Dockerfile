@@ -23,6 +23,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # falls back to DejaVu for just those glyphs while keeping Liberation
     # Sans for regular text (verified in-container before adding this).
     fonts-dejavu-core \
+    # cairosvg (apps/api/app/studio/export.py, Mindmap-PNG-Export) needs
+    # libcairo directly via cairocffi - WeasyPrint >=53 no longer pulls this
+    # in (see comment above), so it must be installed explicitly.
+    libcairo2 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .

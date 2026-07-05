@@ -52,7 +52,7 @@ export function StudioFullscreenOverlay({
   const [artifact, setArtifact] = useState<StudioArtifact<AnyStudioContent> | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
-  const [exportFormat, setExportFormat] = useState<"docx" | "pdf" | null>(null);
+  const [exportFormat, setExportFormat] = useState<"docx" | "pdf" | "png" | null>(null);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [renderRefreshKey, setRenderRefreshKey] = useState(() => Date.now());
@@ -113,7 +113,7 @@ export function StudioFullscreenOverlay({
     }
   }
 
-  async function handleExport(format: "docx" | "pdf") {
+  async function handleExport(format: "docx" | "pdf" | "png") {
     setExportMenuOpen(false);
     setExportFormat(format);
     setError(null);
@@ -156,14 +156,19 @@ export function StudioFullscreenOverlay({
                 </Button>
                 {exportMenuOpen && (
                   <div className="absolute right-0 top-full z-10 mt-1 w-40 overflow-hidden rounded-md border border-border bg-card shadow-lg">
-                    {(type === "infographic" ? (["pdf"] as const) : (["docx", "pdf"] as const)).map((format) => (
+                    {(type === "infographic"
+                      ? (["pdf"] as const)
+                      : type === "mindmap"
+                        ? (["png"] as const)
+                        : (["docx", "pdf"] as const)
+                    ).map((format) => (
                       <button
                         key={format}
                         onClick={() => handleExport(format)}
                         disabled={exportFormat !== null}
                         className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-muted disabled:opacity-50"
                       >
-                        Als {format === "docx" ? "Word" : "PDF"}
+                        Als {format === "docx" ? "Word" : format === "pdf" ? "PDF" : "PNG"}
                         {exportFormat === format && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                       </button>
                     ))}
@@ -196,8 +201,8 @@ export function StudioFullscreenOverlay({
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto px-6 py-8">
-          <div className="mx-auto max-w-4xl">
+        <div className={cn("flex-1 overflow-y-auto", type === "mindmap" ? "flex flex-col p-6" : "px-6 py-8")}>
+          <div className={cn(type === "mindmap" ? "flex flex-1 flex-col" : "mx-auto max-w-4xl")}>
             {loading && <p className="text-sm text-muted-foreground">Lädt…</p>}
             {!loading && error && <p className="text-sm text-red-600">{error}</p>}
 

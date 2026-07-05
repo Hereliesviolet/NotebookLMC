@@ -102,12 +102,12 @@ export async function getStudioArtifact<T>(
 export const generateStudioArtifact = <T,>(notebookId: string, type: StudioArtifactType) =>
   apiFetch<StudioArtifact<T>>(`/api/notebooks/${notebookId}/studio/${type}`, { method: "POST" });
 
-const EXPORT_EXTENSIONS: Record<"docx" | "pdf", string> = { docx: "docx", pdf: "pdf" };
+const EXPORT_EXTENSIONS: Record<"docx" | "pdf" | "png", string> = { docx: "docx", pdf: "pdf", png: "png" };
 
 export async function exportStudioArtifact(
   notebookId: string,
   type: StudioArtifactType,
-  format: "docx" | "pdf"
+  format: "docx" | "pdf" | "png"
 ): Promise<void> {
   const token = getToken();
   const headers = new Headers();

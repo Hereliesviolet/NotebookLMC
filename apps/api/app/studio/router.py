@@ -25,6 +25,7 @@ router = APIRouter(prefix="/api/notebooks", tags=["studio"])
 _EXPORT_MEDIA_TYPES = {
     "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "pdf": "application/pdf",
+    "png": "image/png",
 }
 
 
@@ -98,7 +99,11 @@ async def export_studio_artifact(
             status_code=status.HTTP_404_NOT_FOUND, detail=f"Unknown studio artifact type: '{artifact_type}'"
         )
     if format not in _EXPORT_MEDIA_TYPES:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="format must be 'docx' or 'pdf'")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="format must be 'docx', 'pdf' or 'png'")
+    if format == "png" and artifact_type != "mindmap":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="PNG-Export ist nur für Mindmaps verfügbar"
+        )
 
     notebook = await notebooks_service.get_notebook_or_404(db, notebook_id)
     notebooks_service.assert_can_access(notebook, user.id)
@@ -114,6 +119,8 @@ async def export_studio_artifact(
         if format == "docx":
             document = export_service.build_docx(artifact_type, notebook.title, artifact.content_json, artifact.updated_at)
             file_bytes = export_service.render_docx_bytes(document)
+        elif format == "png":
+            file_bytes = export_service.build_mindmap_png(artifact.content_json)
         else:
             html_content = export_service.build_html(
                 artifact_type, notebook.title, artifact.content_json, artifact.updated_at

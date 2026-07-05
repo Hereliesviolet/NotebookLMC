@@ -1,18 +1,25 @@
-"""Server-side Word (.docx) / PDF export for Studio artifacts (architecture
-doc §19). Renders a persisted artifact's `content_json` (shape depends on
-`type`, see packages/prompts/studio_*_tool_schema.json) into a docx.Document
-and into an HTML string (rendered to PDF via WeasyPrint), styled to match
-the in-app Studio views (apps/frontend/components/studio/Studio*View.tsx)
-and design tokens (apps/frontend/app/globals.css). Both renderers share the
-same tiny markdown parser and per-type block builders so the two output
-formats stay visually consistent.
+"""Server-side Word (.docx) / PDF / PNG export for Studio artifacts
+(architecture doc §19). Renders a persisted artifact's `content_json` (shape
+depends on `type`, see packages/prompts/studio_*_tool_schema.json) into a
+docx.Document and into an HTML string (rendered to PDF via WeasyPrint),
+styled to match the in-app Studio views
+(apps/frontend/components/studio/Studio*View.tsx) and design tokens
+(apps/frontend/app/globals.css). Both renderers share the same tiny markdown
+parser and per-type block builders so the two output formats stay visually
+consistent. Mindmaps don't go through that document pipeline - they're
+exported as a PNG rasterized (via cairosvg) from an SVG built with the same
+radial layout math as the in-app graph, see `build_mindmap_svg`/
+`build_mindmap_png` below.
 """
 import colorsys
 import html
+import math
 import re
+import textwrap
 from datetime import datetime
 from io import BytesIO
 
+import cairosvg
 from docx import Document
 from docx.enum.text import WD_TAB_ALIGNMENT
 from docx.oxml import OxmlElement
@@ -41,6 +48,7 @@ ARTIFACT_TITLES = {
     "faq": "Häufig gestellte Fragen (FAQ)",
     "timeline": "Timeline",
     "briefing": "Briefing",
+    "mindmap": "Mindmap",
     "infographic": "Infografik",
 }
 
@@ -878,6 +886,208 @@ def build_html(artifact_type: str, notebook_title: str, content: dict, generated
 
 def render_pdf_bytes(html_content: str) -> bytes:
     return WeasyHTML(string=html_content).write_pdf()
+
+
+# --- Mindmap: SVG / PNG rendering ---
+#
+# Unlike the other artifact types, the mindmap is exported as a raster image
+# of its in-app node graph rather than reflowed into a document. The layout
+# math below (radial branch placement, per-branch leaf fan-out) is a 1:1
+# port of `buildMindmapGraph()` in
+# apps/frontend/components/studio/StudioMindmapView.tsx, so the exported PNG
+# matches the on-screen graph. The SVG is the render target because it's
+# trivial to build from plain coordinates; cairosvg then rasterizes it.
+
+_MINDMAP_BRANCH_BASE_RADIUS = 260
+_MINDMAP_LEAF_BASE_RADIUS = 170
+
+# fill/stroke/text colors mirror the Tailwind classes on Root/Branch/LeafMindmapNode
+# in StudioMindmapView.tsx (bg-primary, border-border/bg-card, bg-muted/text-muted-foreground).
+_MINDMAP_NODE_STYLES = {
+    "root": {
+        "fill": PRIMARY,
+        "stroke": PRIMARY,
+        "stroke_width": 0,
+        "text_color": "#FFFFFF",
+        "font_weight": 700,
+        "font_size": 14,
+        "max_w": 220,
+        "min_w": 70,
+        "pad_x": 16,
+        "pad_y": 10,
+    },
+    "branch": {
+        "fill": "#FFFFFF",
+        "stroke": BORDER,
+        "stroke_width": 1.5,
+        "text_color": FOREGROUND,
+        "font_weight": 600,
+        "font_size": 13,
+        "max_w": 190,
+        "min_w": 60,
+        "pad_x": 14,
+        "pad_y": 10,
+    },
+    "leaf": {
+        "fill": MUTED_BG,
+        "stroke": MUTED_BG,
+        "stroke_width": 0,
+        "text_color": MUTED,
+        "font_weight": 400,
+        "font_size": 11.5,
+        "max_w": 170,
+        "min_w": 50,
+        "pad_x": 12,
+        "pad_y": 8,
+    },
+}
+
+
+def _mindmap_box_intersection(
+    cx: float, cy: float, half_w: float, half_h: float, tx: float, ty: float
+) -> tuple[float, float]:
+    """Point where the segment from (cx, cy) to (tx, ty) crosses the boundary
+    of the axis-aligned box centered on (cx, cy) - used so edges touch node
+    boxes at whichever side actually faces the other node (root/branch boxes
+    are arranged radially, not stacked top-down), instead of being drawn
+    straight into the box and under the label.
+    """
+    dx, dy = tx - cx, ty - cy
+    if dx == 0 and dy == 0:
+        return cx, cy
+    scales = []
+    if dx != 0:
+        scales.append(half_w / abs(dx))
+    if dy != 0:
+        scales.append(half_h / abs(dy))
+    scale = min(scales)
+    return cx + dx * scale, cy + dy * scale
+
+
+def build_mindmap_svg(content: dict) -> str:
+    root_data = content.get("root") or {}
+    branches = root_data.get("children") or []
+    branch_count = max(len(branches), 1)
+    branch_radius = max(_MINDMAP_BRANCH_BASE_RADIUS, branch_count * 55)
+
+    nodes: dict[str, dict] = {}
+    edges: list[tuple[str, str]] = []
+
+    def add_node(node_id: str, kind: str, x: float, y: float, label: str) -> None:
+        style = _MINDMAP_NODE_STYLES[kind]
+        font_size = style["font_size"]
+        pad_x, pad_y = style["pad_x"], style["pad_y"]
+        avg_char_width = font_size * 0.62
+        line_height = font_size * 1.3
+        max_chars = max(6, int((style["max_w"] - 2 * pad_x) // avg_char_width))
+        lines = textwrap.wrap(label or "", width=max_chars) or [""]
+        longest_line = max(len(line) for line in lines)
+        width = min(style["max_w"], max(style["min_w"], longest_line * avg_char_width + 2 * pad_x))
+        height = 2 * pad_y + line_height * len(lines)
+        nodes[node_id] = {
+            "kind": kind,
+            "x": x,
+            "y": y,
+            "lines": lines,
+            "width": width,
+            "height": height,
+            "font_size": font_size,
+            "line_height": line_height,
+        }
+
+    add_node("root", "root", 0.0, 0.0, root_data.get("label", ""))
+
+    for branch_index, branch in enumerate(branches):
+        branch_angle = (branch_index / branch_count) * 2 * math.pi - math.pi / 2
+        branch_x = math.cos(branch_angle) * branch_radius
+        branch_y = math.sin(branch_angle) * branch_radius
+        branch_id = f"branch-{branch_index}"
+        add_node(branch_id, "branch", branch_x, branch_y, branch.get("label", ""))
+        edges.append(("root", branch_id))
+
+        leaves = branch.get("children") or []
+        leaf_count = len(leaves)
+        if leaf_count == 0:
+            continue
+
+        fan_spread = min(math.pi * 0.85, 0.5 + leaf_count * 0.45)
+        leaf_radius = max(_MINDMAP_LEAF_BASE_RADIUS, leaf_count * 26)
+
+        for leaf_index, leaf in enumerate(leaves):
+            if leaf_count == 1:
+                leaf_angle = branch_angle
+            else:
+                leaf_angle = branch_angle - fan_spread / 2 + (fan_spread * leaf_index) / (leaf_count - 1)
+            leaf_x = branch_x + math.cos(leaf_angle) * leaf_radius
+            leaf_y = branch_y + math.sin(leaf_angle) * leaf_radius
+            leaf_id = f"{branch_id}-leaf-{leaf_index}"
+            add_node(leaf_id, "leaf", leaf_x, leaf_y, leaf.get("label", ""))
+            edges.append((branch_id, leaf_id))
+
+    padding = 40
+    min_x = min(n["x"] - n["width"] / 2 for n in nodes.values())
+    max_x = max(n["x"] + n["width"] / 2 for n in nodes.values())
+    min_y = min(n["y"] - n["height"] / 2 for n in nodes.values())
+    max_y = max(n["y"] + n["height"] / 2 for n in nodes.values())
+    offset_x, offset_y = padding - min_x, padding - min_y
+    canvas_width = (max_x - min_x) + 2 * padding
+    canvas_height = (max_y - min_y) + 2 * padding
+
+    def shifted(node: dict) -> tuple[float, float]:
+        return node["x"] + offset_x, node["y"] + offset_y
+
+    svg_parts = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {canvas_width:.1f} {canvas_height:.1f}" '
+        f'width="{canvas_width:.1f}" height="{canvas_height:.1f}" font-family="Liberation Sans, Arial, sans-serif">',
+        f'<rect x="0" y="0" width="{canvas_width:.1f}" height="{canvas_height:.1f}" fill="#FFFFFF" />',
+    ]
+
+    edge_parts = []
+    for source_id, target_id in edges:
+        source, target = nodes[source_id], nodes[target_id]
+        sx, sy = shifted(source)
+        tx, ty = shifted(target)
+        sx2, sy2 = _mindmap_box_intersection(sx, sy, source["width"] / 2, source["height"] / 2, tx, ty)
+        tx2, ty2 = _mindmap_box_intersection(tx, ty, target["width"] / 2, target["height"] / 2, sx, sy)
+        edge_parts.append(
+            f'<line x1="{sx2:.1f}" y1="{sy2:.1f}" x2="{tx2:.1f}" y2="{ty2:.1f}" '
+            f'stroke="{BORDER}" stroke-width="1.5" />'
+        )
+    svg_parts.append(f"<g>{''.join(edge_parts)}</g>")
+
+    # Rects and text are each drawn in their own pass (all boxes, then all
+    # labels on top) rather than per-node - closely packed leaf fans can have
+    # slightly overlapping boxes (the label-width estimate below is
+    # approximate), and interleaving would let a later box silently paint
+    # over an earlier label's edge.
+    rect_parts = []
+    text_parts = []
+    for node in nodes.values():
+        style = _MINDMAP_NODE_STYLES[node["kind"]]
+        cx, cy = shifted(node)
+        rect_x, rect_y = cx - node["width"] / 2, cy - node["height"] / 2
+        rect_parts.append(
+            f'<rect x="{rect_x:.1f}" y="{rect_y:.1f}" width="{node["width"]:.1f}" height="{node["height"]:.1f}" '
+            f'rx="8" fill="{style["fill"]}" stroke="{style["stroke"]}" stroke-width="{style["stroke_width"]}" />'
+        )
+        text_height = node["line_height"] * len(node["lines"])
+        first_baseline = cy - text_height / 2 + node["font_size"] * 0.85
+        for line_index, line in enumerate(node["lines"]):
+            baseline_y = first_baseline + line_index * node["line_height"]
+            text_parts.append(
+                f'<text x="{cx:.1f}" y="{baseline_y:.1f}" text-anchor="middle" '
+                f'font-size="{node["font_size"]}" font-weight="{style["font_weight"]}" '
+                f'fill="{style["text_color"]}">{html.escape(line)}</text>'
+            )
+    svg_parts.append(f"<g>{''.join(rect_parts)}</g>")
+    svg_parts.append(f"<g>{''.join(text_parts)}</g>")
+    svg_parts.append("</svg>")
+    return "".join(svg_parts)
+
+
+def build_mindmap_png(content: dict) -> bytes:
+    svg = build_mindmap_svg(content)
+    return cairosvg.svg2png(bytestring=svg.encode("utf-8"), background_color="white", scale=2.0)
 
 
 def safe_filename(base: str, extension: str) -> str:
