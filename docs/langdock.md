@@ -129,6 +129,49 @@ gemountet (siehe `docker-compose.yml`).
   Langdock Usage Export API vorbereitet (`LANGDOCK_USAGE_EXPORT_ENABLED`),
   aber ohne bestätigten Request/Response-Contract noch nicht implementiert.
 
+## Prompt-Caching (`cache_control`, verifiziert unterstützt)
+
+Anthropic Prompt-Caching (`cache_control: {"type": "ephemeral"}` auf einem
+Content-Block) läuft **durch Langdocks Anthropic-kompatible Gateway
+hindurch** - live gegen `LANGDOCK_ANTHROPIC_BASE_URL` verifiziert:
+
+1. Erster Call mit einem großen (~18.400 Zeichen) `system`-Content-Block mit
+   `cache_control` -> Response-`usage` enthält
+   `"cache_creation_input_tokens": 6402, "cache_read_input_tokens": 0`.
+2. Zweiter/dritter Call mit demselben Block (wenige Sekunden später) ->
+   `"cache_creation_input_tokens": 0, "cache_read_input_tokens": 6402"` -
+   voller Cache-Hit.
+
+Das offizielle Langdock-OpenAPI-Schema (`docs.langdock.com` Anthropic
+Messages-Endpoint) dokumentiert `cache_control` zwar nicht explizit im
+Request-Content-Block-Schema (`RequestTextBlock` hat dort
+`additionalProperties: false` ohne `cache_control`-Property) und auch nicht
+in seinem `Usage`-Response-Schema - das Feld wird serverseitig aber
+offenbar unverändert an Anthropic durchgereicht und die Response gibt die
+echten Anthropic-Cache-Felder zurück, statt sie herauszufiltern oder den
+Request wegen des zusätzlichen Felds abzulehnen. Die Dokumentation ist hier
+also unvollständig/veraltet - die tatsächliche Unterstützung wurde deshalb
+empirisch verifiziert statt sich auf die Doku zu verlassen.
+
+**Genutzt in `apps/api/app/studio/service.py`** (`_generate_and_validate()`,
+`cache_user_message=True`): der notebook-weite Kontext-Block
+(`build_notebook_wide_context()`) ist für alle Studio-Artefakttypen und
+Retries desselben Notebooks identisch, bis eine Quelle hinzugefügt/entfernt
+wird - ein klassischer Fall für einen wiederholt getroffenen Cache
+(TTL 5 Minuten für `ephemeral`). `LangdockClient._call_messages()`
+implementiert das generisch über den `cache_user_message`-Parameter
+(wickelt den kompletten `user_message`-String stattdessen als
+Content-Block-Array mit `cache_control` ein).
+
+**Bewusst nicht aktiviert in `apps/api/app/chat/service.py`**: der dortige
+Kontext-Block wird pro Chat-Frage aus dem RAG-Retrieval neu zusammengesetzt
+(andere Frage -> andere Embedding-Suche -> i.d.R. andere/anders sortierte
+Chunk-Auswahl) und ist damit fast nie byte-identisch zu einem vorherigen
+Call, selbst für Folgefragen im selben Notebook. Ein Cache-Write kostet
+~25% mehr Input-Tokens als ein normaler Call; ohne realistische
+Wiederholungsrate steht dem kein Cache-Hit gegenüber, der das aufwiegt -
+für den Chat-Pfad also aktuell kein Netto-Vorteil.
+
 ## Streaming (vorbereitet, nicht aktiv genutzt)
 
 `LangdockClient.stream()` kapselt einen Streaming-Aufruf über die

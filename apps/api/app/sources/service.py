@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import uuid
 
@@ -52,7 +53,10 @@ async def delete_source_and_artifacts(db: AsyncSession, source: models.Source) -
         except Exception:
             pass  # best-effort; DB row deletion must not be blocked by storage errors
     try:
-        delete_points_by_source(str(source.id))
+        # Qdrant-Client ist synchron (siehe qdrant/client.py) - in einem
+        # Thread ausgefuehrt, damit dieser async-Endpunkt (sources/router.py
+        # delete_source) den Event-Loop dafuer nicht blockiert.
+        await asyncio.to_thread(delete_points_by_source, str(source.id))
     except Exception:
         pass  # best-effort; DB row deletion must not be blocked by Qdrant errors
     await db.delete(source)

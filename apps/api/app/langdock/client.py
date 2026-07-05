@@ -17,8 +17,8 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Any, Literal
 
-from anthropic import Anthropic, APIStatusError
-from openai import OpenAI
+from anthropic import AsyncAnthropic, APIStatusError
+from openai import AsyncOpenAI
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
 
 from app.core.config import get_settings
@@ -61,6 +61,10 @@ class LangdockUsage:
     status_code: int | None = None
     error_message: str | None = None
     stop_reason: str | None = None
+    # Anthropic Prompt-Caching (verified working via Langdock, siehe
+    # LangdockClient._call_messages docstring auf cache_user_message).
+    cache_creation_input_tokens: int | None = None
+    cache_read_input_tokens: int | None = None
 
 
 @dataclass
@@ -95,6 +99,16 @@ class ResponseTruncatedError(Exception):
 
 
 class LangdockClient:
+    """Async client (architecture doc §17.1 updated for the apps/api async
+    migration): apps/api runs a single asyncio event loop per Uvicorn worker
+    process, so every Langdock call here uses the SDKs' async variants
+    (`AsyncAnthropic`/`AsyncOpenAI`) instead of blocking that loop for the
+    call's entire duration. This class is only used within apps/api - the
+    worker service (apps/worker) has its own separate, still-synchronous
+    LangdockClient (RQ jobs run in plain sync worker processes, not an event
+    loop, so there's nothing to block there).
+    """
+
     def __init__(self) -> None:
         settings = get_settings()
         self._settings = settings
@@ -102,11 +116,11 @@ class LangdockClient:
         if not settings.langdock_api_key:
             logger.warning("LANGDOCK_API_KEY is empty - Langdock calls will fail until it is set in .env")
 
-        self._anthropic = Anthropic(
+        self._anthropic = AsyncAnthropic(
             api_key=settings.langdock_api_key or "unset",
             base_url=_anthropic_sdk_base_url(settings.langdock_anthropic_base_url),
         )
-        self._openai = OpenAI(
+        self._openai = AsyncOpenAI(
             api_key=settings.langdock_api_key or "unset",
             base_url=settings.embedding_base_url,
         )
@@ -121,6 +135,14 @@ class LangdockClient:
         return model
 
     def _retry_decorator(self):
+        """Note: `self._call()` closures below are `async def`, so tenacity's
+        `@retry` auto-detects the coroutine function and switches to its
+        `AsyncRetrying` implementation (`tenacity.asyncio`), which awaits
+        `asyncio.sleep()` between attempts instead of blocking with
+        `time.sleep()` - i.e. retries (incl. their backoff waits) never block
+        the event loop, since the entire decorated async call (SDK call +
+        retry/backoff) runs as a normal awaited coroutine.
+        """
         backoffs = self._settings.retry_backoff_seconds or [5, 15, 30, 60]
         return retry(
             reraise=True,
@@ -129,7 +151,7 @@ class LangdockClient:
             wait=wait_fixed(backoffs[0]) if len(set(backoffs)) == 1 else _variable_wait(backoffs),
         )
 
-    def _call_messages(
+    async def _call_messages(
         self,
         tier: ModelTier,
         system: str,
@@ -138,15 +160,31 @@ class LangdockClient:
         enable_thinking: bool = False,
         tools: list[dict[str, Any]] | None = None,
         tool_choice: dict[str, Any] | None = None,
+        cache_user_message: bool = False,
     ) -> tuple[Any, LangdockUsage]:
         model = self._model_for(tier)
         started = time.monotonic()
 
+        # cache_user_message=True marks the *entire* user_message as an
+        # Anthropic prompt-caching breakpoint (`cache_control: {"type":
+        # "ephemeral"}` on a content block instead of passing `content` as a
+        # plain string) - verified working through Langdock's Anthropic-
+        # compatible gateway (see studio/service.py docstring for the live
+        # test proving cache_read_input_tokens on a repeated call). Only
+        # worth it for callers whose user_message is large and byte-identical
+        # across multiple calls (e.g. the Studio notebook-wide context) -
+        # otherwise this just adds the ~25% cache-write token premium with no
+        # future cache hit to offset it.
+        content: Any = (
+            [{"type": "text", "text": user_message, "cache_control": {"type": "ephemeral"}}]
+            if cache_user_message
+            else user_message
+        )
         create_kwargs: dict[str, Any] = {
             "model": model,
             "max_tokens": max_tokens,
             "system": system,
-            "messages": [{"role": "user", "content": user_message}],
+            "messages": [{"role": "user", "content": content}],
         }
         if enable_thinking:
             create_kwargs["max_tokens"] = max_tokens + EXTENDED_THINKING_BUDGET_TOKENS
@@ -157,15 +195,15 @@ class LangdockClient:
             create_kwargs["tool_choice"] = tool_choice
 
         @self._retry_decorator()
-        def _call():
+        async def _call():
             try:
-                return self._anthropic.messages.create(**create_kwargs)
+                return await self._anthropic.messages.create(**create_kwargs)
             except APIStatusError as exc:
                 if exc.status_code == 429:
                     raise RateLimitedError(str(exc)) from exc
                 raise
 
-        response = _call()
+        response = await _call()
         latency_ms = int((time.monotonic() - started) * 1000)
         usage = LangdockUsage(
             model=model,
@@ -176,30 +214,34 @@ class LangdockClient:
             latency_ms=latency_ms,
             status_code=200,
             stop_reason=getattr(response, "stop_reason", None),
+            cache_creation_input_tokens=getattr(response.usage, "cache_creation_input_tokens", None),
+            cache_read_input_tokens=getattr(response.usage, "cache_read_input_tokens", None),
         )
         return response, usage
 
-    def _generate(
+    async def _generate(
         self, tier: ModelTier, system: str, user_message: str, max_tokens: int, enable_thinking: bool = False
     ) -> LangdockTextResponse:
-        response, usage = self._call_messages(tier, system, user_message, max_tokens, enable_thinking=enable_thinking)
+        response, usage = await self._call_messages(
+            tier, system, user_message, max_tokens, enable_thinking=enable_thinking
+        )
         # Bei aktiviertem Thinking enthaelt response.content zusaetzlich einen
         # thinking-Block vor dem eigentlichen Text - hier bewusst ignoriert,
         # da nur "text"-Bloecke als Antwort zaehlen.
         text = "".join(block.text for block in response.content if getattr(block, "type", None) == "text")
         return LangdockTextResponse(text=text, usage=usage)
 
-    def generate_sonnet(self, system: str, user_message: str, max_tokens: int = 2048) -> LangdockTextResponse:
+    async def generate_sonnet(self, system: str, user_message: str, max_tokens: int = 2048) -> LangdockTextResponse:
         """Claude Sonnet 5 - final answers, complex analysis (architecture doc §7.1)."""
-        return self._generate(
+        return await self._generate(
             "sonnet", system, user_message, max_tokens, enable_thinking=self._settings.langdock_enable_extended_thinking
         )
 
-    def generate_haiku(self, system: str, user_message: str, max_tokens: int = 512) -> LangdockTextResponse:
+    async def generate_haiku(self, system: str, user_message: str, max_tokens: int = 512) -> LangdockTextResponse:
         """Claude Haiku - intent detection, query rewrite, short summaries (§7.2)."""
-        return self._generate("haiku", system, user_message, max_tokens)
+        return await self._generate("haiku", system, user_message, max_tokens)
 
-    def structured_output(
+    async def structured_output(
         self, tier: ModelTier, system: str, user_message: str, max_tokens: int = 2048
     ) -> tuple[dict[str, Any], LangdockUsage]:
         """Calls the given model tier and parses the response as JSON.
@@ -208,7 +250,7 @@ class LangdockClient:
         JSON only, so this is a thin, forgiving wrapper (strips markdown
         code fences if the model adds them anyway).
         """
-        response = self._generate(tier, system, user_message, max_tokens)
+        response = await self._generate(tier, system, user_message, max_tokens)
         raw = response.text.strip()
         if raw.startswith("```"):
             raw = raw.strip("`")
@@ -234,7 +276,7 @@ class LangdockClient:
             )
         return parsed, response.usage
 
-    def generate_structured(
+    async def generate_structured(
         self,
         tier: ModelTier,
         system: str,
@@ -243,6 +285,7 @@ class LangdockClient:
         tool_schema: dict[str, Any],
         max_tokens: int,
         tool_description: str = "",
+        cache_user_message: bool = False,
     ) -> tuple[dict[str, Any], LangdockUsage]:
         """Forces the model to answer via native Anthropic tool-use (`tool_choice`)
         instead of a free-text "return JSON" instruction.
@@ -257,8 +300,14 @@ class LangdockClient:
         """
         tool = {"name": tool_name, "description": tool_description, "input_schema": tool_schema}
         tool_choice = {"type": "tool", "name": tool_name}
-        response, usage = self._call_messages(
-            tier, system, user_message, max_tokens, tools=[tool], tool_choice=tool_choice
+        response, usage = await self._call_messages(
+            tier,
+            system,
+            user_message,
+            max_tokens,
+            tools=[tool],
+            tool_choice=tool_choice,
+            cache_user_message=cache_user_message,
         )
         if usage.stop_reason == "max_tokens":
             raise ResponseTruncatedError(
@@ -277,14 +326,14 @@ class LangdockClient:
             raise ValueError(f"Langdock tool_use.input for tool={tool_name!r} was not a JSON object: {tool_input!r}")
         return tool_input, usage
 
-    def tool_output(
+    async def tool_output(
         self, tier: ModelTier, system: str, user_message: str, tool: dict[str, Any], max_tokens: int
     ) -> tuple[dict[str, Any], LangdockUsage]:
         """Chat-answer entry point (apps/api/app/chat/service.py) - thin wrapper
         around generate_structured() taking an already-assembled tool dict
         (e.g. loaded from final_answer_tool_schema.json via prompts_loader.py).
         """
-        return self.generate_structured(
+        return await self.generate_structured(
             tier,
             system,
             user_message,
@@ -294,20 +343,22 @@ class LangdockClient:
             tool_description=tool.get("description", ""),
         )
 
-    def embed(self, texts: list[str]) -> LangdockEmbeddingResponse:
+    async def embed(self, texts: list[str]) -> LangdockEmbeddingResponse:
         """Langdock OpenAI-compatible embeddings (architecture doc §7.3).
 
         Always uses EMBEDDING_MODEL (text-embedding-ada-002) and never
         Sonnet/Haiku - embeddings are a separate task class in the model
-        router (see model_router.py).
+        router (see model_router.py). Accepts multiple texts in one call
+        (batched) - callers with several queries should pass them all at
+        once instead of looping with one text per call.
         """
         settings = self._settings
         started = time.monotonic()
 
         @self._retry_decorator()
-        def _call():
+        async def _call():
             try:
-                return self._openai.embeddings.create(
+                return await self._openai.embeddings.create(
                     model=settings.embedding_model,
                     input=texts,
                     encoding_format=settings.embedding_encoding_format,
@@ -317,7 +368,7 @@ class LangdockClient:
                     raise RateLimitedError(str(exc)) from exc
                 raise
 
-        response = _call()
+        response = await _call()
         latency_ms = int((time.monotonic() - started) * 1000)
         vectors = [item.embedding for item in response.data]
         usage = LangdockUsage(
@@ -329,7 +380,7 @@ class LangdockClient:
         )
         return LangdockEmbeddingResponse(vectors=vectors, usage=usage)
 
-    def stream(self, tier: ModelTier, system: str, user_message: str, max_tokens: int = 2048):
+    async def stream(self, tier: ModelTier, system: str, user_message: str, max_tokens: int = 2048):
         """Streaming Sonnet/Haiku responses.
 
         Prepared per architecture doc §17.1 but not consumed by the MVP
@@ -338,10 +389,10 @@ class LangdockClient:
         prioritized.
         """
         model = self._model_for(tier)
-        with self._anthropic.messages.stream(
+        async with self._anthropic.messages.stream(
             model=model, max_tokens=max_tokens, system=system, messages=[{"role": "user", "content": user_message}]
         ) as stream:
-            for text in stream.text_stream:
+            async for text in stream.text_stream:
                 yield text
 
     def usage_export(self) -> list[dict[str, Any]]:

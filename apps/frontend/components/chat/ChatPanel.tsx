@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { MessageBubble } from "@/components/chat/MessageBubble";
 import { listMessages, sendChatMessage } from "@/lib/api-client";
+import { useElapsedSeconds } from "@/lib/use-elapsed-seconds";
 import type { Citation, Confidence, MessageRole } from "@/lib/types";
 
 interface DisplayMessage {
@@ -22,6 +23,7 @@ export function ChatPanel({ notebookId }: { notebookId: string }) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const sendingElapsedSeconds = useElapsedSeconds(sending);
 
   useEffect(() => {
     listMessages(notebookId)
@@ -93,7 +95,9 @@ export function ChatPanel({ notebookId }: { notebookId: string }) {
             onFollowUp={sendMessage}
           />
         ))}
-        {sending && <p className="text-xs text-muted-foreground">Antwort wird generiert…</p>}
+        {sending && (
+          <p className="text-xs text-muted-foreground">Antwort wird generiert… ({sendingElapsedSeconds}s)</p>
+        )}
         {error && <p className="text-xs text-red-600">{error}</p>}
         <div ref={bottomRef} />
       </div>

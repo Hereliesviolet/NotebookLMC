@@ -117,6 +117,18 @@ async def _generate_and_validate(client, artifact_type, system_prompt, user_mess
     """Up to 3 Sonnet calls total: retries on truncation (doubled max_tokens)
     and, independently, on a malformed nested-array field (fresh sample at
     the same max_tokens - the failure is stochastic, not budget-related).
+
+    `cache_user_message=True`: `user_message` here *is* the notebook-wide
+    context block (see generate_artifact() below) - identical for every
+    artifact_type/retry on the same notebook until a source is added/removed.
+    Anthropic prompt-caching (`cache_control: {"type": "ephemeral"}`) is
+    confirmed to work through Langdock's Anthropic-compatible gateway
+    (live-tested against the real API: a second call with the same cached
+    block returned `cache_read_input_tokens` equal to the first call's
+    `cache_creation_input_tokens`, with `cache_creation_input_tokens=0` on
+    the repeat - see docs/langdock.md). This lets a same-notebook re-roll
+    ("Neu generieren") or a follow-up artifact within the 5-minute ephemeral
+    TTL skip reprocessing the (often large) shared context.
     """
     tool = load_tool_schema(_TOOL_SCHEMA_NAMES[artifact_type])
     attempt_tokens = max_tokens
@@ -124,7 +136,7 @@ async def _generate_and_validate(client, artifact_type, system_prompt, user_mess
 
     for attempt in range(1, _MAX_GENERATION_ATTEMPTS + 1):
         try:
-            content, usage = client.generate_structured(
+            content, usage = await client.generate_structured(
                 "sonnet",
                 system_prompt,
                 user_message,
@@ -132,6 +144,7 @@ async def _generate_and_validate(client, artifact_type, system_prompt, user_mess
                 tool_schema=tool["input_schema"],
                 max_tokens=attempt_tokens,
                 tool_description=tool.get("description", ""),
+                cache_user_message=True,
             )
         except ResponseTruncatedError as exc:
             last_error = exc

@@ -36,4 +36,28 @@ COPY . .
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Echte Prozess-Parallelitaet statt eines einzelnen Uvicorn-Prozesses: eine
+# einzelne lang laufende Langdock-Anfrage (Studio-Generierung, Chat) blockiert
+# sonst dessen kompletten Event-Loop fuer alle Nutzer, selbst nachdem die
+# einzelnen Langdock-/Qdrant-Aufrufe async/asyncio.to_thread-faehig gemacht
+# wurden (CPU-seitige Arbeit - z.B. JSON/Pydantic-Verarbeitung, Studio-Export-
+# Rendering - blockiert weiterhin den jeweiligen Worker-Prozess).
+#
+# Gunicorn (statt Uvicorn's eingebautem --workers, seit 0.30 verfuegbar) als
+# Prozess-Supervisor: robusteres Worker-Handling in Production (automatischer
+# Neustart abgestuerzter Worker inkl. --timeout fuer haengende Worker,
+# --max-requests gegen Memory-Leaks) - Uvicorn selbst bleibt der eigentliche
+# ASGI-Server je Worker-Prozess ueber den UvicornWorker-Worker-Typ.
+# API_WORKERS ist ueberschreibbar (.env / docker-compose.yml environment),
+# Default 4 passend zu i.d.R. 2-4 CPU-Kernen auf einem Single-VM-Deployment
+# wie hier (kein Kubernetes o.ae. mit Pod-Autoscaling).
+ENV API_WORKERS=4
+
+CMD gunicorn app.main:app \
+    --workers ${API_WORKERS} \
+    --worker-class uvicorn.workers.UvicornWorker \
+    --bind 0.0.0.0:8000 \
+    --timeout 300 \
+    --graceful-timeout 30 \
+    --max-requests 2000 \
+    --max-requests-jitter 200

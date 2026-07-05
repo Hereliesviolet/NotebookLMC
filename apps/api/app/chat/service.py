@@ -5,7 +5,17 @@ User Question -> [Haiku Intent Detection] -> [Haiku Query Rewrite]
               -> Score Heuristic -> Context Assembly
               -> Sonnet 5 Answer Generation -> Citation Validation
               -> Response mit Quellenkarten
+
+Langdock-Aufrufe (Anthropic/OpenAI) laufen ueber den asyncen LangdockClient
+(siehe langdock/client.py) und blockieren den Event-Loop damit nicht mehr.
+Der Qdrant-Python-Client bleibt bewusst synchron (rag/retrieval.py, geteilte
+Qdrant-Aufbau-Logik mit potenziellen zukuenftigen Sync-Konsumenten) - dessen
+search_notebook()/backfill_missing_sources()-Aufrufe werden hier stattdessen
+explizit in asyncio.to_thread() ausgelagert, damit sie den Event-Loop
+ebenfalls nicht blockieren.
 """
+import asyncio
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -41,29 +51,37 @@ async def answer_question(
     intent = None
     search_queries = [payload.message]
     if settings.enable_intent_detection:
-        intent = query_understanding.detect_intent(client, payload.message)
+        intent = await query_understanding.detect_intent(client, payload.message)
         logger.info("detected intent=%s for notebook=%s", intent, notebook_id)
     if settings.enable_query_rewrite:
-        search_queries = query_understanding.rewrite_query(client, payload.message)
+        search_queries = await query_understanding.rewrite_query(client, payload.message)
 
     retrieved_by_id: dict[str, RetrievedChunk] = {}
     primary_embedding: list[float] | None = None
     try:
-        for query in search_queries:
-            embedding = client.embed([query])
-            if not embedding.vectors:
-                continue
+        # Ein gebatchter embed()-Aufruf statt einem Call pro Query - Langdock
+        # gibt die Vektoren in derselben Reihenfolge wie die Eingabetexte
+        # zurueck (OpenAI-Embeddings-API-Konvention), daher per zip() wieder
+        # den einzelnen search_queries zuordenbar.
+        embedding = await client.embed(search_queries)
+        for query, vector in zip(search_queries, embedding.vectors):
             if primary_embedding is None:
-                primary_embedding = embedding.vectors[0]
-            for chunk in search_notebook(notebook_id, embedding.vectors[0], source_ids=payload.source_ids):
+                primary_embedding = vector
+            chunks = await asyncio.to_thread(search_notebook, notebook_id, vector, source_ids=payload.source_ids)
+            for chunk in chunks:
                 existing = retrieved_by_id.get(chunk.chunk_id)
                 if existing is None or chunk.score > existing.score:
                     retrieved_by_id[chunk.chunk_id] = chunk
 
         if primary_embedding is not None:
-            for chunk in backfill_missing_sources(
-                notebook_id, primary_embedding, list(retrieved_by_id.values()), source_ids=payload.source_ids
-            ):
+            backfilled = await asyncio.to_thread(
+                backfill_missing_sources,
+                notebook_id,
+                primary_embedding,
+                list(retrieved_by_id.values()),
+                source_ids=payload.source_ids,
+            )
+            for chunk in backfilled:
                 existing = retrieved_by_id.get(chunk.chunk_id)
                 if existing is None or chunk.score > existing.score:
                     retrieved_by_id[chunk.chunk_id] = chunk
@@ -102,7 +120,7 @@ async def answer_question(
 
     answer_max_tokens = settings.chat_answer_max_tokens
     try:
-        raw, usage = client.tool_output(
+        raw, usage = await client.tool_output(
             "sonnet", system_prompt, user_message, tool=final_answer_tool, max_tokens=answer_max_tokens
         )
     except ResponseTruncatedError as exc:
@@ -114,7 +132,7 @@ async def answer_question(
             retry_max_tokens,
         )
         try:
-            raw, usage = client.tool_output(
+            raw, usage = await client.tool_output(
                 "sonnet", system_prompt, user_message, tool=final_answer_tool, max_tokens=retry_max_tokens
             )
         except ResponseTruncatedError as retry_exc:

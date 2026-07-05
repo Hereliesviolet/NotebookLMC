@@ -11,6 +11,7 @@ import { StudioQuizView } from "@/components/studio/StudioQuizView";
 import { StudioMindmapView } from "@/components/studio/StudioMindmapView";
 import { StudioInfographicView } from "@/components/studio/StudioInfographicView";
 import { exportStudioArtifact, generateStudioArtifact, getStudioArtifact } from "@/lib/api-client";
+import { useElapsedSeconds } from "@/lib/use-elapsed-seconds";
 import { cn, formatDate } from "@/lib/utils";
 import type {
   StudioArtifact,
@@ -56,6 +57,7 @@ export function StudioFullscreenOverlay({
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [renderRefreshKey, setRenderRefreshKey] = useState(() => Date.now());
+  const generatingElapsedSeconds = useElapsedSeconds(generating);
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => setVisible(true));
@@ -181,7 +183,7 @@ export function StudioFullscreenOverlay({
                 {generating ? (
                   <>
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    Wird generiert…
+                    Wird generiert… ({generatingElapsedSeconds}s)
                   </>
                 ) : (
                   <>
@@ -213,7 +215,7 @@ export function StudioFullscreenOverlay({
                   {generating ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      Wird generiert…
+                      Wird generiert… ({generatingElapsedSeconds}s)
                     </>
                   ) : (
                     "Generieren"

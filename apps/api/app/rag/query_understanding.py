@@ -11,20 +11,20 @@ from app.langdock.prompts_loader import load_prompt
 logger = get_logger(__name__)
 
 
-def detect_intent(client: LangdockClient, question: str) -> str:
+async def detect_intent(client: LangdockClient, question: str) -> str:
     system = load_prompt("haiku_intent_detection")
     try:
-        data, _usage = client.structured_output("haiku", system, question, max_tokens=100)
+        data, _usage = await client.structured_output("haiku", system, question, max_tokens=100)
         return data.get("intent", "unknown")
     except Exception:
         logger.exception("intent detection failed - continuing without it")
         return "unknown"
 
 
-def rewrite_query(client: LangdockClient, question: str) -> list[str]:
+async def rewrite_query(client: LangdockClient, question: str) -> list[str]:
     system = load_prompt("haiku_query_rewrite")
     try:
-        data, _usage = client.structured_output("haiku", system, question, max_tokens=300)
+        data, _usage = await client.structured_output("haiku", system, question, max_tokens=300)
         variants = data.get("queries") or data.get("search_variants") or []
         return [v for v in variants if isinstance(v, str)] or [question]
     except Exception:
