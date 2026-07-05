@@ -1,0 +1,30 @@
+{
+  "name": "studio_timeline",
+  "description": "Liefert eine chronologische Liste von Ereignissen/Daten aus den Quellen. Ereignisse ohne ermittelbares Datum erhalten date=null statt das Schema zu brechen.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "events": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "date": {
+              "type": ["string", "null"],
+              "description": "ISO-Datum (YYYY-MM-DD) falls exakt bekannt, sonst null."
+            },
+            "date_label": {
+              "type": "string",
+              "description": "Menschlich lesbares Datum/Zeitraum, z. B. '2024-03' oder 'unklar'."
+            },
+            "description": { "type": "string" },
+            "source_id": { "type": "string" },
+            "quote": { "type": "string" }
+          },
+          "required": ["date", "date_label", "description", "source_id", "quote"]
+        }
+      }
+    },
+    "required": ["events"]
+  }
+}

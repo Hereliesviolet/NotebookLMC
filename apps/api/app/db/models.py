@@ -14,6 +14,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -181,6 +182,29 @@ class AuditEvent(Base):
     entity_id: Mapped[str] = mapped_column(String(64), nullable=False)
     metadata_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class StudioArtifact(Base):
+    """Generated Studio outputs (summary/faq/timeline/briefing, architecture
+    doc §19/§26.5). At most one row per (notebook_id, type) - "Neu generieren"
+    upserts instead of accumulating history.
+    """
+
+    __tablename__ = "studio_artifacts"
+    __table_args__ = (UniqueConstraint("notebook_id", "type", name="uq_studio_artifacts_notebook_type"),)
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    notebook_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("notebooks.id", ondelete="CASCADE"), nullable=False
+    )
+    type: Mapped[str] = mapped_column(String(32), nullable=False)  # summary|faq|timeline|briefing
+    content_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    source_ids_json: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    model: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
 
 class LangdockRequest(Base):

@@ -1,4 +1,4 @@
-import type { ChatResponse, Message, Note, Notebook, Source, User } from "./types";
+import type { ChatResponse, Message, Note, Notebook, Source, StudioArtifact, StudioArtifactType, User } from "./types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const TOKEN_STORAGE_KEY = "notebooklmc_token";
@@ -84,3 +84,52 @@ export const createNote = (notebookId: string, title: string, content: string) =
     method: "POST",
     body: JSON.stringify({ title, content }),
   });
+
+export async function getStudioArtifact<T>(
+  notebookId: string,
+  type: StudioArtifactType
+): Promise<StudioArtifact<T> | null> {
+  const token = getToken();
+  const headers = new Headers();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+
+  const response = await fetch(`${API_BASE_URL}/api/notebooks/${notebookId}/studio/${type}`, { headers });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`API error ${response.status}: ${await response.text()}`);
+  return (await response.json()) as StudioArtifact<T>;
+}
+
+export const generateStudioArtifact = <T,>(notebookId: string, type: StudioArtifactType) =>
+  apiFetch<StudioArtifact<T>>(`/api/notebooks/${notebookId}/studio/${type}`, { method: "POST" });
+
+const EXPORT_EXTENSIONS: Record<"docx" | "pdf", string> = { docx: "docx", pdf: "pdf" };
+
+export async function exportStudioArtifact(
+  notebookId: string,
+  type: StudioArtifactType,
+  format: "docx" | "pdf"
+): Promise<void> {
+  const token = getToken();
+  const headers = new Headers();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/notebooks/${notebookId}/studio/${type}/export?format=${format}`,
+    { headers }
+  );
+  if (!response.ok) throw new Error(`Export fehlgeschlagen (${response.status}): ${await response.text()}`);
+
+  const blob = await response.blob();
+  const disposition = response.headers.get("Content-Disposition");
+  const filenameMatch = disposition?.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
+  const filename = filenameMatch ? decodeURIComponent(filenameMatch[1]) : `${type}.${EXPORT_EXTENSIONS[format]}`;
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}

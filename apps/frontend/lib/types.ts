@@ -79,3 +79,50 @@ export interface User {
   name: string;
   role: string;
 }
+
+export type StudioArtifactType = "summary" | "faq" | "timeline" | "briefing" | "audio-script";
+
+export interface StudioSummaryContent {
+  summary_markdown: string;
+}
+
+export interface StudioFaqItem {
+  question: string;
+  answer: string;
+  source_ids: string[];
+}
+
+export interface StudioFaqContent {
+  items: StudioFaqItem[];
+}
+
+export interface StudioTimelineEvent {
+  date: string | null;
+  date_label: string;
+  description: string;
+  source_id: string;
+  quote: string;
+}
+
+export interface StudioTimelineContent {
+  events: StudioTimelineEvent[];
+}
+
+export interface StudioBriefingContent {
+  summary: string;
+  key_points: string[];
+  risks: string[];
+  recommended_actions: string[];
+  open_questions: string[];
+}
+
+export interface StudioArtifact<T> {
+  id: string;
+  notebook_id: string;
+  type: StudioArtifactType;
+  content: T;
+  source_ids: string[];
+  model: string | null;
+  created_at: string;
+  updated_at: string;
+}

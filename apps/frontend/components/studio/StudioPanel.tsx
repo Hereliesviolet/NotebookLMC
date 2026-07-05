@@ -1,39 +1,102 @@
-import { FileText, HelpCircle, GanttChartSquare, ClipboardList } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+"use client";
 
-const STUDIO_FEATURES = [
-  { icon: FileText, title: "Zusammenfassung", description: "Notebook- und Quellenzusammenfassungen" },
-  { icon: HelpCircle, title: "FAQ", description: "Häufige Fragen aus den Quellen ableiten" },
-  { icon: GanttChartSquare, title: "Timeline", description: "Chronologie über mehrere Quellen" },
-  { icon: ClipboardList, title: "Briefing", description: "Kompaktes Entscheidungs-Briefing" },
-] as const;
+import { useEffect, useState } from "react";
+import { FileText, HelpCircle, GanttChartSquare, ClipboardList, type LucideIcon } from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { StudioFullscreenOverlay } from "@/components/studio/StudioFullscreenOverlay";
+import { getStudioArtifact } from "@/lib/api-client";
+import { cn, formatRelativeTime } from "@/lib/utils";
+import type { StudioArtifact, StudioArtifactType } from "@/lib/types";
 
-/**
- * MVP2 feature per architecture doc §19 - the backend endpoints exist as
- * placeholders (app.studio.router) but aren't functionally implemented yet.
- * This panel documents the planned Studio surface without making calls
- * that would currently just 501.
- */
-export function StudioPanel() {
+interface StudioFeature {
+  type: StudioArtifactType;
+  icon: LucideIcon;
+  title: string;
+  description: string;
+}
+
+const STUDIO_FEATURES: StudioFeature[] = [
+  { type: "summary", icon: FileText, title: "Zusammenfassung", description: "Notebook- und Quellenzusammenfassungen" },
+  { type: "faq", icon: HelpCircle, title: "FAQ", description: "Häufige Fragen aus den Quellen ableiten" },
+  { type: "timeline", icon: GanttChartSquare, title: "Timeline", description: "Chronologie über mehrere Quellen" },
+  { type: "briefing", icon: ClipboardList, title: "Briefing", description: "Kompaktes Entscheidungs-Briefing" },
+];
+
+type ArtifactStatus = StudioArtifact<unknown> | null | undefined;
+
+export function StudioPanel({ notebookId }: { notebookId: string }) {
+  const [activeType, setActiveType] = useState<StudioArtifactType | null>(null);
+  const [statuses, setStatuses] = useState<Partial<Record<StudioArtifactType, ArtifactStatus>>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.allSettled(STUDIO_FEATURES.map((feature) => getStudioArtifact<unknown>(notebookId, feature.type))).then(
+      (results) => {
+        if (cancelled) return;
+        setStatuses(
+          Object.fromEntries(
+            STUDIO_FEATURES.map((feature, index) => {
+              const result = results[index];
+              return [feature.type, result.status === "fulfilled" ? result.value : null];
+            })
+          )
+        );
+      }
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [notebookId]);
+
+  const active = STUDIO_FEATURES.find((feature) => feature.type === activeType);
+
+  function statusLabel(status: ArtifactStatus) {
+    if (status === undefined) return "Lädt…";
+    if (status === null) return "Noch nicht erstellt";
+    return `Aktualisiert ${formatRelativeTime(status.updated_at)}`;
+  }
+
   return (
     <div className="flex flex-col gap-3 p-4">
       <h2 className="text-sm font-semibold">Studio</h2>
       <p className="text-xs text-muted-foreground">
-        Zusammenfassungen, FAQ, Timeline und Briefings folgen in MVP2.
+        Zusammenfassungen, FAQ, Timeline und Briefings aus deinen Quellen generieren.
       </p>
-      {STUDIO_FEATURES.map(({ icon: Icon, title, description }) => (
-        <Card key={title} className="opacity-70">
-          <CardHeader className="flex-row items-center gap-2 space-y-0">
-            <Icon className="h-4 w-4 text-muted-foreground" />
-            <CardTitle>{title}</CardTitle>
-            <Badge variant="muted" className="ml-auto">
-              Bald verfügbar
-            </Badge>
-          </CardHeader>
-          <CardContent className="pt-0 text-xs text-muted-foreground">{description}</CardContent>
-        </Card>
-      ))}
+      <div className="grid grid-cols-2 gap-3">
+        {STUDIO_FEATURES.map(({ type, icon: Icon, title, description }) => {
+          const status = statuses[type];
+          return (
+            <Card
+              key={type}
+              onClick={() => setActiveType(type)}
+              className="flex cursor-pointer flex-col gap-1.5 p-3 transition-shadow hover:shadow-md"
+            >
+              <Icon className="h-5 w-5 text-primary" />
+              <p className="text-sm font-semibold text-foreground">{title}</p>
+              <p className="text-xs leading-snug text-muted-foreground">{description}</p>
+              <p
+                className={cn(
+                  "mt-1 text-[11px] font-medium",
+                  status ? "text-emerald-600" : "text-muted-foreground"
+                )}
+              >
+                {statusLabel(status)}
+              </p>
+            </Card>
+          );
+        })}
+      </div>
+
+      {active && (
+        <StudioFullscreenOverlay
+          key={active.type}
+          notebookId={notebookId}
+          type={active.type}
+          title={active.title}
+          onClose={() => setActiveType(null)}
+          onArtifactChange={(artifact) => setStatuses((prev) => ({ ...prev, [active.type]: artifact }))}
+        />
+      )}
     </div>
   );
 }

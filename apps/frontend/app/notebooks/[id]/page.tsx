@@ -62,7 +62,7 @@ export default function NotebookDetailPage({ params }: { params: { id: string } 
         </section>
 
         <section className="overflow-y-auto border-l border-border">
-          <StudioPanel />
+          <StudioPanel notebookId={notebookId} />
         </section>
       </div>
     </div>

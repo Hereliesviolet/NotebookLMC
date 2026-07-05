@@ -93,6 +93,13 @@ class Settings(BaseSettings):
     # (siehe langdock/client.py ResponseTruncatedError).
     chat_answer_max_tokens: int = 4096
 
+    # Studio (summary/faq/timeline/briefing, architecture doc §19) - notebook-weite
+    # Context-Assembly (studio/context.py): max. Chunks pro Quelle (nach chunk_index)
+    # und Gesamt-Zeichenbudget (gleichmaessig auf alle indizierten Quellen verteilt).
+    studio_max_chunks_per_source: int = 15
+    studio_max_context_chars: int = 40_000
+    studio_answer_max_tokens: int = 4096
+
     @property
     def database_url(self) -> str:
         return (

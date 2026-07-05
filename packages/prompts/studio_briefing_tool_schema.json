@@ -1,0 +1,15 @@
+{
+  "name": "studio_briefing",
+  "description": "Liefert ein Management-Briefing mit Zusammenfassung, Kernpunkten, Risiken, Handlungsempfehlungen und offenen Fragen.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "summary": { "type": "string" },
+      "key_points": { "type": "array", "items": { "type": "string" } },
+      "risks": { "type": "array", "items": { "type": "string" } },
+      "recommended_actions": { "type": "array", "items": { "type": "string" } },
+      "open_questions": { "type": "array", "items": { "type": "string" } }
+    },
+    "required": ["summary", "key_points", "risks", "recommended_actions", "open_questions"]
+  }
+}

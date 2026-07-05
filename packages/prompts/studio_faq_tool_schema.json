@@ -1,0 +1,26 @@
+{
+  "name": "studio_faq",
+  "description": "Liefert eine Liste haeufig gestellter Fragen mit Antworten, ausschliesslich auf Basis der bereitgestellten Quellen.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "question": { "type": "string" },
+            "answer": { "type": "string" },
+            "source_ids": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "source_id-Werte der Quellen, die diese Antwort belegen."
+            }
+          },
+          "required": ["question", "answer", "source_ids"]
+        }
+      }
+    },
+    "required": ["items"]
+  }
+}

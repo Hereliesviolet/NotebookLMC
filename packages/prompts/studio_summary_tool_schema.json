@@ -1,0 +1,14 @@
+{
+  "name": "studio_summary",
+  "description": "Liefert eine strukturierte Zusammenfassung des gesamten Notebook-Inhalts als Markdown-Text.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "summary_markdown": {
+        "type": "string",
+        "description": "Die vollstaendige Zusammenfassung als Markdown (Ueberschriften, Aufzaehlungen, Fettdruck erlaubt)."
+      }
+    },
+    "required": ["summary_markdown"]
+  }
+}
