@@ -131,10 +131,3 @@ Studio-Funktionen (Zusammenfassung, FAQ, Timeline, Briefing) sind als
 Platzhalter-Endpunkte vorbereitet, aber bewusst nicht Teil des MVP1 (siehe
 [`docs/architecture.md`](docs/architecture.md)).
 
-## Ohne echten Langdock-Key testen
-
-Ohne gültigen `LANGDOCK_API_KEY` läuft der komplette Upload- und
-Chat-Flow bis zum jeweiligen Langdock-Call durch und schlägt dort
-kontrolliert fehl (Quelle wird als `failed` markiert, Chat liefert eine
-verständliche Fehlermeldung statt eines 500ers). Das ist beabsichtigt, um
-die Infrastruktur auch ohne Produktionszugang testen zu können.
