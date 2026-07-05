@@ -47,7 +47,8 @@ async def get_notebook(
 ) -> NotebookOut:
     notebook = await service.get_notebook_or_404(db, notebook_id)
     service.assert_can_access(notebook, user.id)
-    return _to_out(notebook, len(notebook.sources))
+    source_count = await service.count_sources(db, notebook_id)
+    return _to_out(notebook, source_count)
 
 
 @router.patch("/{notebook_id}", response_model=NotebookOut)

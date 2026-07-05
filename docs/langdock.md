@@ -9,27 +9,84 @@ Modell-Provider spricht - jeder Aufruf läuft über `LangdockClient`
 
 | Zweck | Endpunkt | Genutzt für |
 | --- | --- | --- |
-| Anthropic-kompatibel | `LANGDOCK_ANTHROPIC_BASE_URL` (`https://api.langdock.com/anthropic/eu`) | Claude Sonnet 5, Claude Haiku |
+| Anthropic-kompatibel | `LANGDOCK_ANTHROPIC_BASE_URL` (`https://api.langdock.com/anthropic/eu/v1`) | Claude Sonnet 5, Claude Haiku |
 | OpenAI-kompatibel | `EMBEDDING_BASE_URL` (`https://api.langdock.com/openai/eu/v1`) | Embeddings (`text-embedding-ada-002`) |
 
 Die Anbindung nutzt bewusst die offiziellen `anthropic`- und `openai`-Python-SDKs
 mit überschriebener `base_url`, da beide Endpunkte laut Projektvorgabe
 API-kompatibel zu den jeweiligen Original-APIs sind.
 
-## Modell-IDs ermitteln (TODO für den Betrieb)
+### Wichtig: `/v1`-Suffix von `LANGDOCK_ANTHROPIC_BASE_URL` und das Anthropic-SDK
+
+Langdock dokumentiert die Anthropic-kompatible Basis-URL inzwischen inklusive
+`/v1`-Suffix (`https://api.langdock.com/anthropic/<region>/v1`). Das offizielle
+`anthropic`-Python-SDK hängt bei **jedem** Messages-Call selbst fest
+`/v1/messages` an seine `base_url` an (siehe `anthropic._base_client`,
+Methode `_prepare_url`). Würde man die `/v1`-Basis-URL unverändert an
+`Anthropic(base_url=...)` durchreichen, landete der Call bei
+`.../v1/v1/messages` - das liefert bei Langdock nachweislich einen `404`.
+
+`LangdockClient` (`apps/api/app/langdock/client.py`,
+`apps/worker/app/langdock/client.py`) entfernt daher intern in
+`_anthropic_sdk_base_url()` ein eventuell vorhandenes `/v1`-Suffix, bevor die
+`base_url` an das SDK übergeben wird. `LANGDOCK_ANTHROPIC_BASE_URL` kann damit
+so konfiguriert werden, wie Langdock es dokumentiert (mit `/v1`) - der Code
+kompensiert die SDK-Eigenheit automatisch. Gegen die echte Langdock-API
+verifiziert (mit und ohne `/v1`-Suffix in der env-Variable).
+
+## Modell-IDs ermitteln
 
 `LANGDOCK_PRIMARY_MODEL` (Claude Sonnet 5) und `LANGDOCK_FAST_MODEL` (Claude
-Haiku) sind in `.env.example` **absichtlich leer**. Es wurden keine
-Modell-IDs erfunden. Um die echten IDs zu ermitteln:
+Haiku) sind in `.env.example` mit den Beispiel-/Default-Werten aus dem
+Langdock-Workspace des Projekt-Betreibers vorbelegt:
+
+```env
+LANGDOCK_PRIMARY_MODEL=claude-sonnet-4-6-default
+LANGDOCK_FAST_MODEL=claude-haiku-4-5@20251001
+```
+
+**Diese IDs sind nicht universell gültig** - Modell-Verfügbarkeit und
+-Bezeichner hängen vom jeweiligen Langdock-Workspace und der Region ab. Für
+einen anderen Workspace/eine andere Region die echten IDs selbst ermitteln:
 
 1. Im Langdock-Dashboard unter API-Zugriff / Modelle nachsehen, oder
 2. Den Modell-Listen-Endpunkt der Langdock Agent API abfragen (Basis-URL:
    `LANGDOCK_AGENT_BASE_URL`, siehe `.env.example`) und die gewünschten
-   Claude-Sonnet-5-/Claude-Haiku-Varianten heraussuchen.
+   Claude-Sonnet-5-/Claude-Haiku-Varianten heraussuchen, oder
+3. Testweise einen minimalen `messages.create()`-Call mit der vermuteten ID
+   gegen `LANGDOCK_ANTHROPIC_BASE_URL` ausführen - bei einer ungültigen ID
+   antwortet Langdock mit `400`/`404` und listet im Fehlertext meist die im
+   Workspace tatsächlich verfügbaren Modell-IDs auf.
 
 Die ermittelten IDs kommen ausschließlich in die `.env`-Datei - niemals in
 den Code. `LangdockClient._model_for()` wirft einen klaren Fehler, wenn eine
 ID fehlt, statt eine falsche ID zu raten.
+
+## Claude Extended Thinking (`LANGDOCK_ENABLE_EXTENDED_THINKING`)
+
+Optionales Feature, Default `false` (Verhalten bleibt dann unverändert).
+Steuert den `thinking`-Parameter der Anthropic Messages API für den
+finalen Sonnet-Aufruf (`LangdockClient.generate_sonnet()`):
+
+- `false` (Default): Sonnet wird wie bisher ohne `thinking`-Parameter
+  aufgerufen.
+- `true`: Der Aufruf enthält zusätzlich
+  `thinking={"type": "enabled", "budget_tokens": 4096}`. `max_tokens` wird
+  dafür intern automatisch um dieses Budget erhöht, da die Anthropic-API
+  verlangt, dass `max_tokens` strikt größer als `budget_tokens` ist. Die
+  Antwort enthält dann vor dem eigentlichen Text-Block zusätzlich einen
+  `thinking`-Content-Block; `LangdockClient` filtert beim Zusammensetzen der
+  Antwort ausschließlich auf Blöcke vom Typ `text` und überspringt den
+  `thinking`-Block automatisch.
+
+Voraussetzung ist ein `anthropic`-Python-SDK, das den `thinking`-Parameter
+unterstützt (ab ca. Version 0.49; das Projekt verwendet `anthropic==0.69.0`,
+siehe `apps/api/requirements.txt`/`apps/worker/requirements.txt`).
+
+Hinweis: Ob ein konkretes Modell den klassischen `budget_tokens`-Modus
+unterstützt oder eine neuere Adaptive-Thinking-Variante verlangt, hängt vom
+jeweiligen Modell/Provider-Stand ab - bei einer Ablehnung durch Langdock
+(`400`) die Fehlermeldung prüfen, bevor die ID/den Parameter änderst.
 
 ## Model Router
 

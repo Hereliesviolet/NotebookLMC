@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import models
+from app.qdrant.client import delete_points_by_source
 from app.storage.minio_client import delete_object, original_object_path, upload_bytes
 
 
@@ -41,16 +42,19 @@ async def create_source(
 
 
 async def delete_source_and_artifacts(db: AsyncSession, source: models.Source) -> None:
-    """Removes DB row, chunks (cascade) and the MinIO object (§22.3 deletion concept).
-
-    Qdrant point cleanup happens in the qdrant-indexing milestone once chunk
-    -> point id bookkeeping is wired up end-to-end.
+    """Removes DB row, chunks (cascade via FK), the MinIO object and the
+    Qdrant points (§22.3 deletion concept). Jobs referencing this source
+    cascade-delete at the DB level too (jobs_source_id_fkey ON DELETE CASCADE).
     """
     if source.storage_path:
         try:
             delete_object(source.storage_path)
         except Exception:
             pass  # best-effort; DB row deletion must not be blocked by storage errors
+    try:
+        delete_points_by_source(str(source.id))
+    except Exception:
+        pass  # best-effort; DB row deletion must not be blocked by Qdrant errors
     await db.delete(source)
     await db.commit()
 

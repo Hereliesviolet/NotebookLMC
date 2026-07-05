@@ -19,9 +19,10 @@ class Settings(BaseSettings):
     # Langdock
     langdock_api_key: str = ""
     langdock_region: str = "eu"
-    langdock_anthropic_base_url: str = "https://api.langdock.com/anthropic/eu"
+    langdock_anthropic_base_url: str = "https://api.langdock.com/anthropic/eu/v1"
     langdock_primary_model: str = ""
     langdock_fast_model: str = ""
+    langdock_enable_extended_thinking: bool = False
     langdock_agent_base_url: str = "https://api.langdock.com/agent/v1"
     langdock_use_agents_for_structured_tasks: bool = False
     langdock_knowledge_api_enabled: bool = False

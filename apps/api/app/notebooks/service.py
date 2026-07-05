@@ -20,6 +20,16 @@ async def list_notebooks(db: AsyncSession, owner_id: str) -> list[tuple[models.N
     return list(result.all())
 
 
+async def count_sources(db: AsyncSession, notebook_id: str) -> int:
+    """Counts sources via a query instead of `notebook.sources` - the lazy
+    relationship can't be accessed on an AsyncSession without an explicit
+    (e.g. selectinload) eager load and would raise MissingGreenlet otherwise.
+    """
+    stmt = select(func.count(models.Source.id)).where(models.Source.notebook_id == notebook_id)
+    result = await db.execute(stmt)
+    return result.scalar_one()
+
+
 async def get_notebook_or_404(db: AsyncSession, notebook_id: str) -> models.Notebook:
     try:
         notebook_uuid = uuid.UUID(notebook_id)

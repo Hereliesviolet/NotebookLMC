@@ -18,9 +18,10 @@ class Settings(BaseSettings):
     # Langdock
     langdock_api_key: str = ""
     langdock_region: str = "eu"
-    langdock_anthropic_base_url: str = "https://api.langdock.com/anthropic/eu"
+    langdock_anthropic_base_url: str = "https://api.langdock.com/anthropic/eu/v1"
     langdock_primary_model: str = ""
     langdock_fast_model: str = ""
+    langdock_enable_extended_thinking: bool = False
 
     # Embeddings (Langdock OpenAI-compatible endpoint)
     embedding_provider: str = "langdock"

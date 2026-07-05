@@ -53,6 +53,24 @@ def ensure_collection(client: QdrantClient | None = None) -> None:
     )
 
 
+def delete_points_by_source(source_id: str, client: QdrantClient | None = None) -> None:
+    """Removes all points for a source (via the `source_id` payload index) so
+    deleting a source doesn't leave orphaned vectors behind (architecture doc
+    §22.3 deletion concept).
+    """
+    settings = get_settings()
+    client = client or get_qdrant_client()
+    client.delete(
+        collection_name=settings.qdrant_collection,
+        points_selector=qmodels.FilterSelector(
+            filter=qmodels.Filter(
+                must=[qmodels.FieldCondition(key="source_id", match=qmodels.MatchValue(value=source_id))]
+            )
+        ),
+        wait=True,
+    )
+
+
 if __name__ == "__main__":
     # `make qdrant-setup` entrypoint: python -m app.qdrant.client
     ensure_collection()

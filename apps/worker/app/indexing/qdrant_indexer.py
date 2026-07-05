@@ -14,6 +14,12 @@ from app.qdrant.client import ensure_collection, get_qdrant_client
 
 logger = get_logger(__name__)
 
+# Qdrant rejects HTTP request bodies above ~32MB (see qdrant_client.http.exceptions.
+# UnexpectedResponse "JSON payload ... is larger than allowed"). A single upsert
+# for a large source (many chunks x 1536-dim vectors) can exceed that easily, so
+# upserts are sent in bounded batches - well below the limit even for long chunks.
+_UPSERT_BATCH_SIZE = 200
+
 
 def index_chunks(notebook_id: str, source_id: str, document_name: str, chunks: list, vectors: list[list[float]]) -> list[str]:
     if len(chunks) != len(vectors):
@@ -49,6 +55,9 @@ def index_chunks(notebook_id: str, source_id: str, document_name: str, chunks: l
             )
         )
 
-    client.upsert(collection_name=settings.qdrant_collection, points=points, wait=True)
+    for start in range(0, len(points), _UPSERT_BATCH_SIZE):
+        batch = points[start : start + _UPSERT_BATCH_SIZE]
+        client.upsert(collection_name=settings.qdrant_collection, points=batch, wait=True)
+
     logger.info("indexed %d chunks into qdrant for source %s", len(points), source_id)
     return point_ids

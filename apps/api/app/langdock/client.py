@@ -28,6 +28,28 @@ logger = get_logger(__name__)
 
 ModelTier = Literal["sonnet", "haiku"]
 
+# Extended-Thinking-Budget fuer Sonnet-Aufrufe mit LANGDOCK_ENABLE_EXTENDED_THINKING=true.
+# max_tokens muss laut Anthropic-API strikt groesser als budget_tokens sein, daher wird es
+# in _generate() um dieses Budget erhoeht (siehe generate_sonnet()).
+EXTENDED_THINKING_BUDGET_TOKENS = 4096
+
+
+def _anthropic_sdk_base_url(configured_base_url: str) -> str:
+    """Normalisiert LANGDOCK_ANTHROPIC_BASE_URL fuer das Anthropic-Python-SDK.
+
+    Das SDK haengt bei jedem Messages-Call selbst fest "/v1/messages" an die
+    base_url an (siehe anthropic._base_client.BaseClient._prepare_url). Ein in
+    LANGDOCK_ANTHROPIC_BASE_URL bereits enthaltenes "/v1"-Suffix (so wie es
+    Langdock inzwischen als vollstaendige Basis-URL dokumentiert) wuerde sonst
+    zu ".../v1/v1/messages" und einem 404 bei Langdock fuehren - gegen die
+    echte Langdock-API verifiziert. Deshalb wird ein vorhandenes "/v1"-Suffix
+    hier entfernt, bevor die base_url an das SDK uebergeben wird.
+    """
+    trimmed = configured_base_url.rstrip("/")
+    if trimmed.endswith("/v1"):
+        trimmed = trimmed[: -len("/v1")]
+    return trimmed
+
 
 @dataclass
 class LangdockUsage:
@@ -66,7 +88,7 @@ class LangdockClient:
 
         self._anthropic = Anthropic(
             api_key=settings.langdock_api_key or "unset",
-            base_url=settings.langdock_anthropic_base_url,
+            base_url=_anthropic_sdk_base_url(settings.langdock_anthropic_base_url),
         )
         self._openai = OpenAI(
             api_key=settings.langdock_api_key or "unset",
@@ -91,19 +113,26 @@ class LangdockClient:
             wait=wait_fixed(backoffs[0]) if len(set(backoffs)) == 1 else _variable_wait(backoffs),
         )
 
-    def _generate(self, tier: ModelTier, system: str, user_message: str, max_tokens: int) -> LangdockTextResponse:
+    def _generate(
+        self, tier: ModelTier, system: str, user_message: str, max_tokens: int, enable_thinking: bool = False
+    ) -> LangdockTextResponse:
         model = self._model_for(tier)
         started = time.monotonic()
+
+        create_kwargs: dict[str, Any] = {
+            "model": model,
+            "max_tokens": max_tokens,
+            "system": system,
+            "messages": [{"role": "user", "content": user_message}],
+        }
+        if enable_thinking:
+            create_kwargs["max_tokens"] = max_tokens + EXTENDED_THINKING_BUDGET_TOKENS
+            create_kwargs["thinking"] = {"type": "enabled", "budget_tokens": EXTENDED_THINKING_BUDGET_TOKENS}
 
         @self._retry_decorator()
         def _call():
             try:
-                return self._anthropic.messages.create(
-                    model=model,
-                    max_tokens=max_tokens,
-                    system=system,
-                    messages=[{"role": "user", "content": user_message}],
-                )
+                return self._anthropic.messages.create(**create_kwargs)
             except APIStatusError as exc:
                 if exc.status_code == 429:
                     raise RateLimitedError(str(exc)) from exc
@@ -112,6 +141,9 @@ class LangdockClient:
         response = _call()
         latency_ms = int((time.monotonic() - started) * 1000)
 
+        # Bei aktiviertem Thinking enthaelt response.content zusaetzlich einen
+        # thinking-Block vor dem eigentlichen Text - hier bewusst ignoriert,
+        # da nur "text"-Bloecke als Antwort zaehlen.
         text = "".join(block.text for block in response.content if getattr(block, "type", None) == "text")
         usage = LangdockUsage(
             model=model,
@@ -126,7 +158,9 @@ class LangdockClient:
 
     def generate_sonnet(self, system: str, user_message: str, max_tokens: int = 2048) -> LangdockTextResponse:
         """Claude Sonnet 5 - final answers, complex analysis (architecture doc §7.1)."""
-        return self._generate("sonnet", system, user_message, max_tokens)
+        return self._generate(
+            "sonnet", system, user_message, max_tokens, enable_thinking=self._settings.langdock_enable_extended_thinking
+        )
 
     def generate_haiku(self, system: str, user_message: str, max_tokens: int = 512) -> LangdockTextResponse:
         """Claude Haiku - intent detection, query rewrite, short summaries (§7.2)."""

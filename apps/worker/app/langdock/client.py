@@ -24,6 +24,24 @@ logger = get_logger(__name__)
 
 ModelTier = Literal["sonnet", "haiku"]
 
+# Siehe apps/api/app/langdock/client.py fuer die Begruendung (gegen die echte
+# Langdock-API verifiziert).
+EXTENDED_THINKING_BUDGET_TOKENS = 4096
+
+
+def _anthropic_sdk_base_url(configured_base_url: str) -> str:
+    """Normalisiert LANGDOCK_ANTHROPIC_BASE_URL fuer das Anthropic-Python-SDK.
+
+    Das SDK haengt bei jedem Messages-Call selbst fest "/v1/messages" an die
+    base_url an. Ein bereits vorhandenes "/v1"-Suffix in
+    LANGDOCK_ANTHROPIC_BASE_URL wuerde sonst zu ".../v1/v1/messages" und
+    einem 404 bei Langdock fuehren.
+    """
+    trimmed = configured_base_url.rstrip("/")
+    if trimmed.endswith("/v1"):
+        trimmed = trimmed[: -len("/v1")]
+    return trimmed
+
 
 @dataclass
 class LangdockUsage:
@@ -69,7 +87,10 @@ class LangdockClient:
         if not settings.langdock_api_key:
             logger.warning("LANGDOCK_API_KEY is empty - Langdock calls will fail until it is set in .env")
 
-        self._anthropic = Anthropic(api_key=settings.langdock_api_key or "unset", base_url=settings.langdock_anthropic_base_url)
+        self._anthropic = Anthropic(
+            api_key=settings.langdock_api_key or "unset",
+            base_url=_anthropic_sdk_base_url(settings.langdock_anthropic_base_url),
+        )
         self._openai = OpenAI(api_key=settings.langdock_api_key or "unset", base_url=settings.embedding_base_url)
 
     def _model_for(self, tier: ModelTier) -> str:
@@ -90,16 +111,26 @@ class LangdockClient:
             wait=_VariableWait(backoffs),
         )
 
-    def _generate(self, tier: ModelTier, system: str, user_message: str, max_tokens: int) -> LangdockTextResponse:
+    def _generate(
+        self, tier: ModelTier, system: str, user_message: str, max_tokens: int, enable_thinking: bool = False
+    ) -> LangdockTextResponse:
         model = self._model_for(tier)
         started = time.monotonic()
+
+        create_kwargs: dict[str, Any] = {
+            "model": model,
+            "max_tokens": max_tokens,
+            "system": system,
+            "messages": [{"role": "user", "content": user_message}],
+        }
+        if enable_thinking:
+            create_kwargs["max_tokens"] = max_tokens + EXTENDED_THINKING_BUDGET_TOKENS
+            create_kwargs["thinking"] = {"type": "enabled", "budget_tokens": EXTENDED_THINKING_BUDGET_TOKENS}
 
         @self._retry_decorator()
         def _call():
             try:
-                return self._anthropic.messages.create(
-                    model=model, max_tokens=max_tokens, system=system, messages=[{"role": "user", "content": user_message}]
-                )
+                return self._anthropic.messages.create(**create_kwargs)
             except APIStatusError as exc:
                 if exc.status_code == 429:
                     raise RateLimitedError(str(exc)) from exc
@@ -121,7 +152,9 @@ class LangdockClient:
         return self._generate("haiku", system, user_message, max_tokens)
 
     def generate_sonnet(self, system: str, user_message: str, max_tokens: int = 2048) -> LangdockTextResponse:
-        return self._generate("sonnet", system, user_message, max_tokens)
+        return self._generate(
+            "sonnet", system, user_message, max_tokens, enable_thinking=self._settings.langdock_enable_extended_thinking
+        )
 
     def structured_output(self, tier: ModelTier, system: str, user_message: str, max_tokens: int = 2048) -> tuple[dict[str, Any], LangdockUsage]:
         response = self._generate(tier, system, user_message, max_tokens)

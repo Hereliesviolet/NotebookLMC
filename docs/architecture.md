@@ -183,10 +183,12 @@ bereits vorbereitet).
 
 ## 12. Risiken und offene Punkte
 
-- **Langdock-Modell-IDs:** `LANGDOCK_PRIMARY_MODEL`/`LANGDOCK_FAST_MODEL`
-  sind absichtlich leer in `.env.example` - siehe [`docs/langdock.md`](langdock.md)
-  zur Ermittlung der echten IDs. Der Code liest diese IDs ausschließlich aus
-  der Konfiguration, niemals hartkodiert.
+- **Langdock-Modell-IDs:** `LANGDOCK_PRIMARY_MODEL`/`LANGDOCK_FAST_MODEL` sind
+  in `.env.example` mit Beispiel-/Default-Werten aus einem konkreten
+  Langdock-Workspace vorbelegt, sind aber workspace-/regionsabhängig - siehe
+  [`docs/langdock.md`](langdock.md) zur Ermittlung der für den eigenen
+  Workspace gültigen IDs. Der Code liest diese IDs ausschließlich aus der
+  Konfiguration, niemals hartkodiert.
 - **Parsing-Qualität:** Für die MVP wurden bewusst schlanke Libraries
   (`pypdf`, `python-docx`, `pandas`, `beautifulsoup4`) statt
   Docling/Unstructured gewählt, um Docker-Images klein zu halten. Gescannte
