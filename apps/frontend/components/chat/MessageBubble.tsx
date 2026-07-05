@@ -2,6 +2,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { Collapsible } from "@/components/ui/collapsible";
 import { CitationCard } from "@/components/chat/CitationCard";
 import { FollowUpChips } from "@/components/chat/FollowUpChips";
 import type { Citation, Confidence, MessageRole } from "@/lib/types";
@@ -71,11 +72,16 @@ export function MessageBubble({
       </div>
 
       {citations.length > 0 && (
-        <div className="grid w-full max-w-2xl gap-2 sm:grid-cols-2">
-          {citations.map((citation, index) => (
-            <CitationCard key={`${citation.chunk_id}-${index}`} citation={citation} index={index} />
-          ))}
-        </div>
+        <Collapsible
+          className="w-full max-w-2xl"
+          trigger={(open) => <span>{open ? "Quellen ausblenden" : `Quellen anzeigen (${citations.length})`}</span>}
+        >
+          <div className="grid gap-2 sm:grid-cols-2">
+            {citations.map((citation, index) => (
+              <CitationCard key={`${citation.chunk_id}-${index}`} citation={citation} index={index} />
+            ))}
+          </div>
+        </Collapsible>
       )}
 
       {followUpQuestions.length > 0 && onFollowUp && (
