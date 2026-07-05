@@ -51,3 +51,14 @@ def load_final_answer_tool() -> dict[str, Any]:
     """
     path = _prompts_dir() / "final_answer_tool_schema.json"
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+@lru_cache
+def load_tool_schema(name: str) -> dict[str, Any]:
+    """`name` is the filename without extension, e.g. 'studio_summary_tool_schema'.
+
+    Generic counterpart to load_final_answer_tool() - used for the Studio
+    artifact tools (summary/faq/timeline/briefing).
+    """
+    path = _prompts_dir() / f"{name}.json"
+    return json.loads(path.read_text(encoding="utf-8"))

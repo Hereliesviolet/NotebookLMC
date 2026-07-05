@@ -234,19 +234,29 @@ class LangdockClient:
             )
         return parsed, response.usage
 
-    def tool_output(
-        self, tier: ModelTier, system: str, user_message: str, tool: dict[str, Any], max_tokens: int
+    def generate_structured(
+        self,
+        tier: ModelTier,
+        system: str,
+        user_message: str,
+        tool_name: str,
+        tool_schema: dict[str, Any],
+        max_tokens: int,
+        tool_description: str = "",
     ) -> tuple[dict[str, Any], LangdockUsage]:
         """Forces the model to answer via native Anthropic tool-use (`tool_choice`)
         instead of a free-text "return JSON" instruction.
 
         Anthropic parses/validates the tool-call arguments server-side against
-        `tool["input_schema"]`, so `block.input` is already a Python dict - no
+        `tool_schema`, so `block.input` is already a Python dict - no
         `json.loads()` on model-generated text, which structurally avoids the
         broken-escaping failure class free-text JSON is prone to (unescaped
         quotes/newlines from quoted source material breaking the JSON string).
+        Generalized so chat (tool_output()) and the Studio artifacts
+        (summary/faq/timeline/briefing) share one implementation.
         """
-        tool_choice = {"type": "tool", "name": tool["name"]}
+        tool = {"name": tool_name, "description": tool_description, "input_schema": tool_schema}
+        tool_choice = {"type": "tool", "name": tool_name}
         response, usage = self._call_messages(
             tier, system, user_message, max_tokens, tools=[tool], tool_choice=tool_choice
         )
@@ -259,15 +269,30 @@ class LangdockClient:
         tool_use_blocks = [block for block in response.content if getattr(block, "type", None) == "tool_use"]
         if not tool_use_blocks:
             raise ValueError(
-                f"Langdock model did not return a tool_use block for tool={tool['name']!r} "
+                f"Langdock model did not return a tool_use block for tool={tool_name!r} "
                 f"(stop_reason={usage.stop_reason!r})"
             )
         tool_input = tool_use_blocks[0].input
         if not isinstance(tool_input, dict):
-            raise ValueError(
-                f"Langdock tool_use.input for tool={tool['name']!r} was not a JSON object: {tool_input!r}"
-            )
+            raise ValueError(f"Langdock tool_use.input for tool={tool_name!r} was not a JSON object: {tool_input!r}")
         return tool_input, usage
+
+    def tool_output(
+        self, tier: ModelTier, system: str, user_message: str, tool: dict[str, Any], max_tokens: int
+    ) -> tuple[dict[str, Any], LangdockUsage]:
+        """Chat-answer entry point (apps/api/app/chat/service.py) - thin wrapper
+        around generate_structured() taking an already-assembled tool dict
+        (e.g. loaded from final_answer_tool_schema.json via prompts_loader.py).
+        """
+        return self.generate_structured(
+            tier,
+            system,
+            user_message,
+            tool_name=tool["name"],
+            tool_schema=tool["input_schema"],
+            max_tokens=max_tokens,
+            tool_description=tool.get("description", ""),
+        )
 
     def embed(self, texts: list[str]) -> LangdockEmbeddingResponse:
         """Langdock OpenAI-compatible embeddings (architecture doc §7.3).
