@@ -170,6 +170,26 @@ diese Auflösung auf die falsche Netzwerk-IP zeigen und der Server ist über
 das andere Netzwerk nicht mehr erreichbar. `docker-compose.shared-caddy.yml`
 setzt deshalb explizit `HOSTNAME=0.0.0.0` für `frontend`.
 
+**Wichtiger DNS-Alias-Fallstrick bei mehreren Netzwerken (Hostnamen-Kollision):**
+Sobald `api` zusätzlich im geteilten Netzwerk hängt, tauchen dort ggf. bereits
+generische Service-Kurznamen anderer Projekte auf - beobachtet auf diesem
+Host: `postgres` (bereits von `fremdes-projekt-a-postgres-1` belegt) und `minio` (bereits
+von `fremdes-projekt-b-minio` belegt). Wenn `api` selbst per Compose-Service-Namen
+(`POSTGRES_HOST=postgres`, `MINIO_ENDPOINT=http://minio:9000`, analog für
+`REDIS_URL`/`QDRANT_URL`) auf seine eigenen Abhängigkeiten zugreift, kann
+Dockers eingebautes DNS im Container den Kurznamen auf den **fremden**,
+gleichnamigen Container im geteilten Netzwerk statt auf den eigenen
+Notebook-Container auflösen (beobachtetes Symptom: `api` verband sich beim
+Neustart nach dem Netzwerk-Join gegen `fremdes-projekt-a-postgres-1` statt
+`notebook-postgres` und scheiterte an dessen Zugangsdaten). Fix:
+`docker-compose.shared-caddy.yml` überschreibt `POSTGRES_HOST`, `REDIS_URL`,
+`QDRANT_URL` und `MINIO_ENDPOINT` für `api` auf die global eindeutigen
+`container_name`-Werte (`notebook-postgres`, `notebook-redis`,
+`notebook-qdrant`, `notebook-minio`) statt der generischen Service-Namen -
+Container-Namen sind hostweit eindeutig und daher kollisionsfrei, unabhängig
+davon, wie viele weitere Projekte mit gleichnamigen Services auf demselben
+Host laufen oder wie oft `api` neu gestartet/neu ins Netzwerk gehängt wird.
+
 Der eigene `caddy`-Service in `docker-compose.yml` bleibt für Hosts erhalten,
 auf denen Port 80/443 frei sind (Standardfall, z. B. ein dedizierter Server
 nur für NotebookLMC) - dort einfach `docker compose up -d` ohne die
