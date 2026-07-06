@@ -22,33 +22,39 @@ reicht Port 3000 allein, siehe nächster Abschnitt):
 | Qdrant | 6333 |
 | MinIO (S3-API / Konsole) | 9000 / 9001 |
 
-## Direkter Zugriff ohne Caddy (Next.js Server-Side Rewrites)
+## Direkter Zugriff ohne Caddy (manueller Next.js Route-Handler-Proxy)
 
 Seit der Umstellung auf same-origin/relative API-Pfade (siehe Abschnitt
-"Frontend-Build-Variable" unten) besitzt `apps/frontend/next.config.mjs`
-zusätzlich eine `rewrites()`-Funktion, die `/api/:path*` **server-seitig**
-(im Next.js-Server selbst, nicht im Browser) an `INTERNAL_API_URL` (Default
-`http://api:8000`) weiterleitet:
+"Frontend-Build-Variable" unten) besitzt das Frontend einen catch-all
+App-Router-Route-Handler unter `apps/frontend/app/api/[...path]/route.ts`,
+der `/api/*` **server-seitig** (im Next.js-Server selbst, nicht im Browser)
+per manuellem `fetch()` an `INTERNAL_API_URL` (Default `http://api:8000`)
+weiterleitet - inklusive Query-Parametern, Body, Headers (insbesondere
+`Authorization`) und Streaming der Response (auch für Binärantworten wie
+PNG/PDF/DOCX-Exports).
 
-```js
-async rewrites() {
-  const internalApiUrl = process.env.INTERNAL_API_URL ?? "http://api:8000";
-  return [{ source: "/api/:path*", destination: `${internalApiUrl}/api/:path*` }];
-}
-```
+**Historie:** Bis 2026-07 übernahm das dafür ein deklaratives
+`rewrites()` in `next.config.mjs`. Dessen interner Node-`http`-Proxy hat
+jedoch keine konfigurierbare Zeitgrenze und brach lang laufende
+Studio-Generierungen (Briefing/Quiz/Mindmap, 30-60+s) nach einer festen,
+zu kurzen Frist mit `socket hang up`/`ECONNRESET` ab, obwohl die API im
+Hintergrund erfolgreich weiterlief - im Browser erschien das als
+"API error 500" trotz gesunder API. Der manuelle Route-Handler ersetzt
+`rewrites()` vollständig und steuert das Timeout explizit selbst (siehe
+Konstante `PROXY_TIMEOUT_MS` in `route.ts`, aktuell 310s - passend zum
+Gunicorn-`--timeout 300` in `apps/api/Dockerfile`, mit 10s Puffer, damit
+Gunicorns eigener, saubererer Timeout-Fehler zuerst greift statt eines
+Gleichstands mit dem Proxy-Timeout).
 
-Dadurch fängt der Next.js-Server die vom Browser gesendeten relativen
-`/api/*`-Aufrufe ab, bevor sie den Next.js-Router erreichen, und proxied sie
-selbst über das Docker-Netz zu `api:8000` - unabhängig davon, ob Caddy
-überhaupt läuft. Das ermöglicht direkten Zugriff auf die App über Port 3000
-(z. B. lokale Entwicklung, Cursor-Portforwarding, oder jede Sandbox/jeder Host,
-auf dem Port 80/443 aus anderen Gründen nicht verfügbar sind), ohne dass der
-eigene `caddy`-Service dafür gestartet werden muss:
+Das ermöglicht direkten Zugriff auf die App über Port 3000 (z. B. lokale
+Entwicklung, Cursor-Portforwarding, oder jede Sandbox/jeder Host, auf dem
+Port 80/443 aus anderen Gründen nicht verfügbar sind), ohne dass der eigene
+`caddy`-Service dafür gestartet werden muss:
 
 ```bash
 docker compose up -d --build frontend api   # caddy bleibt ungestartet
 curl http://localhost:3000/                 # Frontend
-curl http://localhost:3000/api/notebooks    # API ueber den Next.js-Rewrite-Proxy
+curl http://localhost:3000/api/notebooks    # API ueber den Next.js-Route-Handler-Proxy
 ```
 
 `INTERNAL_API_URL` ist im Gegensatz zu `NEXT_PUBLIC_API_URL` eine reine
