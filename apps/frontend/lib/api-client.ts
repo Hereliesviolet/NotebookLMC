@@ -5,25 +5,26 @@ import type { ChatResponse, Message, Note, Notebook, Source, StudioArtifact, Stu
 // docs/deployment.md, Abschnitt "Frontend-Build-Variable"). Nur bei einer
 // komplett separaten API-Domain/Subdomain hier eine absolute URL setzen.
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
-const TOKEN_STORAGE_KEY = "notebooklmc_token";
+const CSRF_COOKIE_NAME = "csrf_token";
+const CSRF_HEADER_NAME = "X-CSRF-Token";
+const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
-export function getToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(TOKEN_STORAGE_KEY);
-}
-
-export function setToken(token: string): void {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(TOKEN_STORAGE_KEY, token);
+function getCsrfCookie(): string | null {
+  if (typeof document === "undefined") return null;
+  const match = document.cookie.match(new RegExp(`(?:^|; )${CSRF_COOKIE_NAME}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]) : null;
 }
 
 async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = getToken();
+  const method = (options.method ?? "GET").toUpperCase();
   const headers = new Headers(options.headers);
   headers.set("Content-Type", headers.get("Content-Type") ?? "application/json");
-  if (token) headers.set("Authorization", `Bearer ${token}`);
+  if (MUTATING_METHODS.has(method)) {
+    const csrfToken = getCsrfCookie();
+    if (csrfToken) headers.set(CSRF_HEADER_NAME, csrfToken);
+  }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
+  const response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers, credentials: "include" });
   if (!response.ok) {
     const body = await response.text();
     throw new Error(`API error ${response.status}: ${body}`);
@@ -32,14 +33,13 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
   return (await response.json()) as T;
 }
 
-export async function login(email?: string): Promise<string> {
-  const data = await apiFetch<{ access_token: string }>("/api/auth/login", {
-    method: "POST",
-    body: JSON.stringify({ email }),
-  });
-  setToken(data.access_token);
-  return data.access_token;
-}
+export const register = (email: string, password: string, name: string) =>
+  apiFetch<User>("/api/auth/register", { method: "POST", body: JSON.stringify({ email, password, name }) });
+
+export const login = (email: string, password: string) =>
+  apiFetch<User>("/api/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
+
+export const logout = () => apiFetch<{ ok: boolean }>("/api/auth/logout", { method: "POST" });
 
 export const getMe = () => apiFetch<User>("/api/auth/me");
 
@@ -55,13 +55,17 @@ export const deleteNotebook = (id: string) => apiFetch<void>(`/api/notebooks/${i
 export const listSources = (notebookId: string) => apiFetch<Source[]>(`/api/notebooks/${notebookId}/sources`);
 
 export async function uploadSource(notebookId: string, file: File): Promise<Source> {
-  const token = getToken();
   const formData = new FormData();
   formData.append("file", file);
 
+  const headers = new Headers();
+  const csrfToken = getCsrfCookie();
+  if (csrfToken) headers.set(CSRF_HEADER_NAME, csrfToken);
+
   const response = await fetch(`${API_BASE_URL}/api/notebooks/${notebookId}/sources/upload`, {
     method: "POST",
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    headers,
+    credentials: "include",
     body: formData,
   });
   if (!response.ok) {
@@ -93,11 +97,9 @@ export async function getStudioArtifact<T>(
   notebookId: string,
   type: StudioArtifactType
 ): Promise<StudioArtifact<T> | null> {
-  const token = getToken();
-  const headers = new Headers();
-  if (token) headers.set("Authorization", `Bearer ${token}`);
-
-  const response = await fetch(`${API_BASE_URL}/api/notebooks/${notebookId}/studio/${type}`, { headers });
+  const response = await fetch(`${API_BASE_URL}/api/notebooks/${notebookId}/studio/${type}`, {
+    credentials: "include",
+  });
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(`API error ${response.status}: ${await response.text()}`);
   return (await response.json()) as StudioArtifact<T>;
@@ -113,13 +115,9 @@ export async function exportStudioArtifact(
   type: StudioArtifactType,
   format: "docx" | "pdf" | "png"
 ): Promise<void> {
-  const token = getToken();
-  const headers = new Headers();
-  if (token) headers.set("Authorization", `Bearer ${token}`);
-
   const response = await fetch(
     `${API_BASE_URL}/api/notebooks/${notebookId}/studio/${type}/export?format=${format}`,
-    { headers }
+    { credentials: "include" }
   );
   if (!response.ok) throw new Error(`Export fehlgeschlagen (${response.status}): ${await response.text()}`);
 
