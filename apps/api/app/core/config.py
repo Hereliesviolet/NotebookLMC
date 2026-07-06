@@ -69,10 +69,15 @@ class Settings(BaseSettings):
     langdock_retry_backoff_seconds: str = "5,15,30,60"
 
     # Dev / demo auth
-    dev_auth_enabled: bool = True
     dev_demo_user_email: str = "demo@notebooklm.local"
     dev_demo_user_name: str = "Demo User"
     dev_demo_user_password: str = "change-me-in-local-env"
+
+    # Sessions (Redis-backed, cookie-based - see docs/security.md)
+    session_cookie_secure: bool = False
+    session_ttl_seconds: int = 604_800
+    session_cookie_domain: str = ""
+    min_password_length: int = 10
 
     # Upload limits (architecture doc §22.1)
     max_upload_size_mb: int = 50
