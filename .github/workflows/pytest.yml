@@ -22,6 +22,34 @@ on:
 jobs:
   api-tests:
     runs-on: ubuntu-latest
+    # Die neuen Auth-Endpoint-Tests (tests/test_auth_endpoints.py, Block 7 der
+    # Session-Auth-Migration) brauchen eine echte Postgres+Redis-Instanz -
+    # kein Mocking bei echten Endpoint-Tests. Als Service-Container statt im
+    # docker-run-Image selbst, damit sie unabhaengig vom api-Image-Build
+    # bereitstehen.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: notebook
+          POSTGRES_USER: notebook
+          POSTGRES_PASSWORD: notebook
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U notebook -d notebook"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
 
@@ -31,9 +59,33 @@ jobs:
       # LANGDOCK_PRIMARY_MODEL/LANGDOCK_FAST_MODEL muessen nur nicht-leer sein
       # (Tests mocken den eigentlichen Anthropic/OpenAI-Client) - kein echter
       # LANGDOCK_API_KEY notwendig, da keine reale Netzwerkanfrage erfolgt.
+      #
+      # --network host: die Service-Container obenstehend veroeffentlichen
+      # ihre Ports auf dem Runner-Host (localhost:5432/6379) - das gebaute
+      # api-Image laeuft hier bewusst NICHT im default Docker-Compose-Netzwerk
+      # (das existiert in CI gar nicht), sondern direkt im Netzwerk-Namespace
+      # des Runners, um diese Ports darüber zu erreichen.
+      - name: Run alembic migrations against the test database
+        run: |
+          docker run --rm --network host \
+            -e POSTGRES_HOST=localhost \
+            -e POSTGRES_PORT=5432 \
+            -e POSTGRES_DB=notebook \
+            -e POSTGRES_USER=notebook \
+            -e POSTGRES_PASSWORD=notebook \
+            -e LANGDOCK_PRIMARY_MODEL=claude-sonnet-ci-dummy \
+            -e LANGDOCK_FAST_MODEL=claude-haiku-ci-dummy \
+            notebooklmc-api-ci alembic upgrade head
+
       - name: Run api pytest suite
         run: |
-          docker run --rm \
+          docker run --rm --network host \
+            -e POSTGRES_HOST=localhost \
+            -e POSTGRES_PORT=5432 \
+            -e POSTGRES_DB=notebook \
+            -e POSTGRES_USER=notebook \
+            -e POSTGRES_PASSWORD=notebook \
+            -e REDIS_URL=redis://localhost:6379/0 \
             -e LANGDOCK_PRIMARY_MODEL=claude-sonnet-ci-dummy \
             -e LANGDOCK_FAST_MODEL=claude-haiku-ci-dummy \
             notebooklmc-api-ci pytest tests -q
