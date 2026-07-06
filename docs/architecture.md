@@ -68,7 +68,7 @@ NotebookLMC/
 ```text
 apps/api/app/
 ├── main.py                 FastAPI App, Router-Registrierung, CORS, Startup (Qdrant/MinIO ensure)
-├── core/                    config.py, security.py (Dev-Auth), logging.py, deps.py
+├── core/                    config.py, security.py (Auth/Argon2), sessions.py (Redis-Sessions), rate_limit.py, middleware.py (CSRF), logging.py, deps.py
 ├── db/                      base.py, session.py, models.py (10 Tabellen)
 ├── schemas/                 Pydantic-Schemas je Domäne
 ├── auth/, notebooks/, sources/, notes/, chat/, studio/   Router + Service je Domäne
@@ -80,11 +80,11 @@ apps/api/app/
 └── alembic/                  Migrationen
 ```
 
-**Auth (MVP):** Ein Demo-User wird beim ersten Login automatisch angelegt.
-`POST /api/auth/login` gibt ein statisches, opakes Bearer-Token zurück
-(`dev:<user_id>`). `get_current_user` ist die einzige Stelle, die für echte
-Auth (SSO/Entra ID) ausgetauscht werden muss - siehe
-[`docs/security.md`](security.md).
+**Auth:** Echte E-Mail/Passwort-Anmeldung mit Argon2-Passwort-Hashing und
+serverseitigen Redis-Sessions (`httpOnly`-Cookie `session_id` + CSRF-Cookie
+`csrf_token`, Double-Submit-Cookie-Schutz via `CsrfMiddleware`). Kein Token
+im Response-Body mehr. `get_current_user` validiert ausschließlich die
+Session aus dem Cookie - Details siehe [`docs/security.md`](security.md).
 
 ## 5. Frontend-Architektur (Next.js)
 
@@ -97,7 +97,7 @@ apps/frontend/
 │   ├── chat/            ChatPanel, MessageBubble, CitationCard, FollowUpChips
 │   ├── studio/          StudioPanel (MVP2-Platzhalter)
 │   ├── notes/           NotesPanel
-│   ├── layout/          Sidebar, AuthGate (Dev-Auto-Login)
+│   ├── layout/          Sidebar (inkl. Logout), AuthGate (Session-Check + Redirect zu /login)
 │   └── ui/              Button, Card, Badge, Input, Textarea, Dialog (shadcn/ui-inspiriert)
 └── lib/                 api-client.ts, types.ts (Mirror von packages/shared-types)
 ```
@@ -194,9 +194,10 @@ bereits vorbereitet).
   Docling/Unstructured gewählt, um Docker-Images klein zu halten. Gescannte
   PDFs ohne Text-Layer werden aktuell nicht per OCR verarbeitet.
   Dieselbe Wahl wurde für den Worker-Container getroffen.
-- **Kein produktionsreifes Auth/TLS im lokalen Setup:** Caddy läuft lokal
-  ohne echte Domain/Zertifikat; Dev-Auth ist ein Platzhalter (siehe
-  [`docs/security.md`](security.md)).
+- **Kein TLS im lokalen Setup:** Caddy läuft lokal ohne echte
+  Domain/Zertifikat. Für den produktiven Betrieb (echte Domain, TLS, Auth
+  über Argon2/Redis-Sessions) siehe [`docs/security.md`](security.md) und
+  [`docs/deployment.md`](deployment.md).
 - **Frontend-Abhängigkeiten:** Next.js ist auf `14.2.35` gepinnt (Fix für die
   RSC-DoS-Sicherheitslücken vom Dezember 2025, CVE-2025-55184/67779). Einige
   in `npm audit` verbleibende Advisories (Image-Optimizer, Middleware,

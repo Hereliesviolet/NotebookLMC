@@ -77,8 +77,10 @@ Danach ist die Anwendung erreichbar unter:
 - MinIO-Konsole: http://localhost:9001
 - Qdrant-Dashboard: http://localhost:6333/dashboard
 
-Die Demo-/Dev-Auth loggt beim ersten Frontend-Aufruf automatisch als Demo-User
-ein (kein Passwort nötig, siehe [`docs/security.md`](docs/security.md)).
+`make seed` legt den Demo-User `DEV_DEMO_USER_EMAIL` mit dem Passwort aus
+`DEV_DEMO_USER_PASSWORD` (`.env`) an. Anmelden über den echten Login-Screen
+unter `/login` mit diesen Zugangsdaten - siehe
+[`docs/security.md`](docs/security.md).
 
 ## Nützliche Befehle
 
