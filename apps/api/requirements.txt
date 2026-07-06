@@ -23,6 +23,6 @@ python-slugify==8.0.4
 python-docx==1.2.0
 weasyprint==69.0
 jinja2==3.1.6
-cairosvg==2.7.1
+cairosvg==2.9.0
 # Testing
 pytest==8.3.3
