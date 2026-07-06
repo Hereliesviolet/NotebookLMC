@@ -23,8 +23,9 @@ flowchart TB
     Caddy --> Frontend["Next.js Frontend"]
     Caddy --> API["FastAPI Backend"]
     Frontend --> API
+    Browser -->|"Login/Session-Cookie"| API
     API --> Postgres["PostgreSQL"]
-    API --> Redis["Redis (Queue)"]
+    API --> Redis["Redis (Queue + Sessions + Rate-Limit)"]
     API --> MinIO["MinIO (Dateien)"]
     API --> Qdrant["Qdrant (Vektoren)"]
     API --> Langdock["Langdock Gateway"]
@@ -37,6 +38,8 @@ flowchart TB
     Langdock --> Haiku["Claude Haiku"]
     Langdock --> Embeddings["OpenAI Embeddings (ada-002)"]
 ```
+
+> **Caddy-Deployment:** Im Standardfall startet das Projekt einen eigenen `caddy`-Container. Auf Hosts, auf denen Port 80/443 bereits von einem anderen Caddy-Container belegt ist, kann der eigene Service durch einen geteilten Caddy ersetzt werden – siehe [`docs/deployment.md`](docs/deployment.md), Abschnitt „Deployment mit geteiltem Caddy".
 
 ## Voraussetzungen
 
@@ -101,7 +104,7 @@ make clean            # Stack stoppen und Volumes löschen (DESTRUKTIV)
 ```text
 NotebookLMC/
 ├── apps/
-│   ├── frontend/   Next.js 14 (App Router), TypeScript, Tailwind CSS
+│   ├── frontend/   Next.js 15 (App Router), TypeScript, Tailwind CSS
 │   ├── api/        FastAPI, SQLAlchemy (async), Alembic
 │   └── worker/      Python RQ-Worker (Parsing, Chunking, Embeddings, Qdrant-Indexierung)
 ├── packages/
@@ -118,18 +121,39 @@ NotebookLMC/
 └── Makefile
 ```
 
-## MVP-Umfang
+## Feature-Umfang
 
-Der aktuelle Stand deckt den kompletten Kernflow ab:
+### Kernflow
 
-1. Notebook anlegen
+1. Notebook anlegen, Login/Registrierung über `/login` und `/register`
 2. Quelle hochladen (PDF, DOCX, TXT, Markdown, HTML, CSV, XLSX)
 3. Datei landet in MinIO, `sources`-Eintrag in Postgres, Job wird über Redis/RQ eingereiht
 4. Worker: Text extrahieren → Chunking → Embeddings über Langdock → Vektoren in Qdrant
 5. Chatfrage stellen → Query-Embedding → Qdrant-Suche → Context Assembly → Sonnet-5-Antwort → Citation Validation
 6. Antwort mit Quellenkarten im Frontend
 
-Studio-Funktionen (Zusammenfassung, FAQ, Timeline, Briefing) sind als
-Platzhalter-Endpunkte vorbereitet, aber bewusst nicht Teil des MVP1 (siehe
-[`docs/architecture.md`](docs/architecture.md)).
+### Studio (7 Artefakt-Typen, vollständig implementiert)
+
+Alle Studio-Typen generieren ihren Artefakt aus dem gesamten Notebook-Kontext über Sonnet 5 (Anthropic Tool-Use) und bieten Word- und PDF-Export; Mindmap zusätzlich PNG-Export (SVG → cairosvg):
+
+- **Zusammenfassung** – Markdown-formatierte Gesamtzusammenfassung aller Quellen
+- **FAQ** – strukturierte Frage-Antwort-Paare mit Quellenreferenzen
+- **Timeline** – chronologisch sortierte Ereignisliste
+- **Briefing** – Kernpunkte, Risiken, empfohlene Maßnahmen, offene Fragen
+- **Quiz** – Multiple-Choice-Fragen zur Wissensüberprüfung
+- **Mindmap** – interaktiver React-Flow-Graph mit radialem Layout + PNG-Export
+- **Infografik** – Poster-Layout mit Headline, Statistiken und Abschnittskarten
+
+### Notizen
+
+Vollständiges CRUD für Notebook-Notizen (`apps/api/app/notes/router.py`, `apps/frontend/components/notes/NotesPanel.tsx`).
+
+### Offene Lücken (bewusst, für Produktivbetrieb relevant)
+
+- Kein Passwort-Reset-Flow, keine E-Mail-Verifizierung
+- Rate-Limiting gilt für `/api/auth/login`, aber **nicht** für `/api/auth/register`
+- Notebook-Sharing über `notebook_members` ist im Datenmodell vorbereitet, aber nicht aktiv genutzt
+- Audio/Podcast-Feature aus der ursprünglichen Spezifikation wurde bewusst nicht umgesetzt
+
+Architektur-Details: [`docs/architecture.md`](docs/architecture.md)
 

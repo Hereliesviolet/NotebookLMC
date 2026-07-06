@@ -132,13 +132,13 @@ feststeht: DNS-A-Record (und ggf. AAAA) auf diesen Server zeigen lassen, den
 `http://`-Präfix entfernen und den Site-Block auf die echte Domain ändern -
 Caddy bezieht dann automatisch ein Let's-Encrypt-Zertifikat.
 
-**Konkretes Beispiel (produktiv umgesetzt):** `<produktions-domain>` läuft
+**Konkretes Beispiel (produktiv umgesetzt):** `notebook.example.de` läuft
 über exakt diesen Weg auf einem Host, auf dem bereits ein gemeinsamer Caddy
 (`fremdes-projekt-a-caddy-1`, Repo `<pfad-zum-anderen-projekt>`) für andere Projekte (fremdes-projekt-a, fremdes-projekt-b) aktiv
 ist:
 
-1. DNS-A-Record von `<produktions-domain>` auf die Server-IP gesetzt (per
-   `dig @8.8.8.8 <produktions-domain> +short` und `dig @1.1.1.1 ...`
+1. DNS-A-Record von `notebook.example.de` auf die Server-IP gesetzt (per
+   `dig @8.8.8.8 notebook.example.de +short` und `dig @1.1.1.1 ...`
    gegen zwei unabhängige Resolver verifiziert, bevor der Site-Block
    aktiviert wurde - ohne korrektes DNS bricht die Let's-Encrypt-Challenge).
    **Sowohl A- als auch AAAA-Record prüfen:** Ein AAAA-Record, der (z. B.
@@ -150,15 +150,15 @@ ist:
    (`ip -6 addr show scope global`) korrigieren.
 2. `git -C <pfad-zum-anderen-projekt> update-index --skip-worktree caddy_config/Caddyfile`
    ausgeführt, bevor die Datei bearbeitet wurde (siehe Warnhinweis oben).
-3. Platzhalter-Block auf `<produktions-domain>` (ohne `http://`-Präfix)
+3. Platzhalter-Block auf `notebook.example.de` (ohne `http://`-Präfix)
    geändert, Security-Header (`Strict-Transport-Security`, `nosniff`,
    `DENY`, `Referrer-Policy`) und JSON-Access-Log analog zum
    `fremdes-projekt-b.example.de`-Block übernommen.
 4. `docker exec fremdes-projekt-a-caddy-1 caddy validate --config /etc/caddy/Caddyfile`
    vor jedem Reload, danach `docker exec fremdes-projekt-a-caddy-1 caddy reload --config
    /etc/caddy/Caddyfile`.
-5. Verifiziert per `curl -I https://<produktions-domain>/` (Frontend) und
-   `curl -I https://<produktions-domain>/api/health` (API) sowie
+5. Verifiziert per `curl -I https://notebook.example.de/` (Frontend) und
+   `curl -I https://notebook.example.de/api/health` (API) sowie
    Regressionscheck der Nachbarprojekte (`fremdes-projekt-a.example.de`,
    `fremdes-projekt-b.example.de` weiterhin erreichbar).
 

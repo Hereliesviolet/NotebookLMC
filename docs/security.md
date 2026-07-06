@@ -150,11 +150,17 @@ Fehlermeldungen und technische Metadaten (Latenz, Modellname). Das
 ## Bekannte Lücken (für Produktivbetrieb zu schließen)
 
 - Kein Audit-Log-Review-UI (die `audit_events`-Tabelle existiert im
-  Datenmodell, wird aber im MVP noch nicht befüllt).
-- Kein Passwort-Reset-Flow (E-Mail-Versand ist im MVP nicht vorgesehen) -
-  ein vergessenes Passwort erfordert aktuell einen manuellen DB-Eingriff.
+  Datenmodell, wird aber aktuell noch nicht befüllt).
+- Kein Passwort-Reset-Flow (E-Mail-Versand nicht implementiert) - ein
+  vergessenes Passwort erfordert aktuell einen manuellen DB-Eingriff.
+- Keine E-Mail-Verifizierung bei der Registrierung.
+- **Kein Rate-Limiting auf `/api/auth/register`**: `check_login_rate_limit()`
+  wird ausschließlich im `/api/auth/login`-Endpoint aufgerufen.
+  `/api/auth/register` ist aktuell ungeschützt gegen Massenregistrierungen
+  (z. B. Ressourcenerschöpfung durch viele Fake-Accounts). Dies ist eine
+  bekannte, offene Lücke, die bei öffentlichem Betrieb zu schließen ist.
 - `notebook_members`-basiertes Sharing (siehe Auth-Abschnitt oben) ist im
-  Datenmodell vorbereitet, aber im MVP nicht aktiv.
+  Datenmodell vorbereitet, aber nicht aktiv genutzt.
 
 Rate-Limiting (Login, Redis-Fixed-Window) und CSRF-Schutz
 (Double-Submit-Cookie) sind seit der Session-Auth-Migration umgesetzt, siehe

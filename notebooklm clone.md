@@ -1,3 +1,5 @@
+> **Hinweis:** Dieses Dokument ist die ursprüngliche Ausgangsspezifikation und beschreibt die initiale Vision des Projekts. Den aktuellen Implementierungsstand (vollständig umgesetzte Features, bekannte Abweichungen von dieser Spec und offene Lücken) beschreibt [`docs/architecture.md`](docs/architecture.md). Einige hier aufgeführte Punkte (z. B. Audio/Podcast-Feature §19.2) wurden bewusst nicht umgesetzt.
+
 # Architekturkonzept: Self-hosted NotebookLM-Klon mit Langdock
 
 ## 1. Zielbild

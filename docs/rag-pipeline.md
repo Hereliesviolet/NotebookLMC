@@ -58,9 +58,17 @@ eingrenzen will). Liefert bis zu 30 Treffer pro Suchvariante.
 ## 4. Score-Heuristik
 
 `apply_score_heuristic()` dedupliziert über mehrere Suchvarianten (höchster
-Score gewinnt) und behält die Top 10 Chunks. Bewusst einfach für die MVP -
-echtes Haiku-Reranking (`RERANKER_ENABLED`) ist als Erweiterungspunkt
-vorgesehen, aber noch nicht implementiert.
+Score gewinnt pro Chunk) und behält die Top 10 Chunks. Zusätzlich greift eine
+per-Source-Diversity-Garantie: statt eines reinen globalen Top-k (das bei
+Notebooks mit einer dominanten Quelle alle anderen Quellen aus dem Kontext
+verdrängen kann) werden die Kandidaten source-weise sortiert und per Round-Robin
+vergeben, sodass jede Quelle ihren besten Chunk(s) zuerst einbringt; danach
+füllen die global besten verbleibenden Chunks die restlichen Slots. Eine
+separate `backfill_missing_sources()`-Funktion stellt sicher, dass auch Quellen
+mit niedrigem Qdrant-Score mindestens einen Kandidaten liefern können (je eine
+kleine Qdrant-Suche pro noch nicht erfasster Quelle). Haiku-Reranking
+(`RERANKER_ENABLED`) ist als nächster Erweiterungspunkt vorgesehen, aber
+noch nicht aktiv genutzt.
 
 ## 5. Context Assembly
 
@@ -76,8 +84,12 @@ System-Prompt: `packages/prompts/system_final_answer.md` (wortgetreu:
 ausschließlich quellenbasiert antworten, keine erfundenen Fakten/Zitate,
 Unklarheiten benennen). Output-Schema: `packages/prompts/output_schema.json`
 (`answer`, `citations[]`, `confidence`, `missing_information[]`,
-`follow_up_questions[]`). `LangdockClient.structured_output()` ruft Claude
-Sonnet 5 auf und parst die Antwort als JSON.
+`follow_up_questions[]`). `LangdockClient.tool_output()` ruft Claude Sonnet 5
+über native Anthropic Tool-Use auf (statt freiem "return JSON"-Instruction) –
+Anthropic validiert das Tool-Input-Argument serverseitig gegen das Schema,
+sodass die Antwort als Python-Dict ohne JSON-Parsing-Risiko zurückkommt. Intern
+delegiert `tool_output()` an `generate_structured()`, das auch für alle
+Studio-Artefakttypen genutzt wird.
 
 ## 7. Citation Validation
 
