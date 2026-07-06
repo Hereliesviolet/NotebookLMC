@@ -24,10 +24,10 @@ flowchart TB
     Caddy --> API["FastAPI Backend"]
     Frontend --> API
     Browser -->|"Login/Session-Cookie"| API
-    API --> Postgres["PostgreSQL"]
+    API --> Postgres["PostgreSQL (Source of Truth)"]
     API --> Redis["Redis (Queue + Sessions + Rate-Limit)"]
-    API --> MinIO["MinIO (Dateien)"]
-    API --> Qdrant["Qdrant (Vektoren)"]
+    API --> MinIO["MinIO (Files/Artefakte)"]
+    API --> Qdrant["Qdrant (Vectors)"]
     API --> Langdock["Langdock Gateway"]
     Redis --> Worker["Python Worker"]
     Worker --> Postgres
