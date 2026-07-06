@@ -69,7 +69,7 @@ class Settings(BaseSettings):
     langdock_retry_backoff_seconds: str = "5,15,30,60"
 
     # Dev / demo auth
-    dev_demo_user_email: str = "demo@notebooklm.local"
+    dev_demo_user_email: str = "demo@notebooklmc.dev"
     dev_demo_user_name: str = "Demo User"
     dev_demo_user_password: str = "change-me-in-local-env"
 
