@@ -7,6 +7,7 @@ import asyncio
 from sqlalchemy import select
 
 from app.core.config import get_settings
+from app.core.security import hash_password
 from app.db import models
 from app.db.session import AsyncSessionLocal
 
@@ -17,7 +18,12 @@ async def main() -> None:
         result = await db.execute(select(models.User).where(models.User.email == settings.dev_demo_user_email))
         user = result.scalar_one_or_none()
         if user is None:
-            user = models.User(email=settings.dev_demo_user_email, name=settings.dev_demo_user_name, role="owner")
+            user = models.User(
+                email=settings.dev_demo_user_email,
+                name=settings.dev_demo_user_name,
+                password_hash=hash_password(settings.dev_demo_user_password),
+                role="owner",
+            )
             db.add(user)
             await db.commit()
             await db.refresh(user)
@@ -41,9 +47,7 @@ async def main() -> None:
         else:
             print(f"Demo notebook already exists: {notebook.title} ({notebook.id})")
 
-        from app.core.security import issue_dev_token
-
-        print(f"\nDev bearer token: {issue_dev_token(str(user.id))}")
+        print(f"\nLogin at {settings.app_url}/login with {user.email} / DEV_DEMO_USER_PASSWORD")
 
 
 if __name__ == "__main__":

@@ -72,6 +72,7 @@ class Settings(BaseSettings):
     dev_auth_enabled: bool = True
     dev_demo_user_email: str = "demo@notebooklm.local"
     dev_demo_user_name: str = "Demo User"
+    dev_demo_user_password: str = "change-me-in-local-env"
 
     # Upload limits (architecture doc §22.1)
     max_upload_size_mb: int = 50

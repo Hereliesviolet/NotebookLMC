@@ -19,6 +19,11 @@ python-multipart==0.0.31
 tenacity==9.0.0
 python-slugify==8.0.4
 
+# Auth (password hashing, apps/api/app/core/security.py) - pinned explicitly
+# even though it was already present transitively via minio's dependency
+# tree, so it doesn't silently disappear if minio drops it later.
+argon2-cffi==25.1.0
+
 # Studio artifact export (Word/PDF/PNG, apps/api/app/studio/export.py)
 python-docx==1.2.0
 weasyprint==69.0

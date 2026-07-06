@@ -1,16 +1,29 @@
-"""Dev/demo authentication (architecture doc §21.1).
+"""Authentication: Argon2 password hashing + cookie-based sessions.
 
-This is intentionally a stub: a single demo user gets a static, opaque
-bearer token. It exists so the rest of the app can depend on
-`get_current_user` without caring how auth actually works. Swapping this
-for real auth (Entra ID / SSO, §21.2) later only means replacing the
-functions in this file - no other module needs to change.
+`get_current_user` is the sole FastAPI dependency the rest of the app
+relies on - everything else in this module (hashing, dev token stubs during
+the ongoing migration) is an implementation detail behind it.
 """
 from dataclasses import dataclass
 
+from argon2 import PasswordHasher
+from argon2.exceptions import VerifyMismatchError
 from fastapi import HTTPException, Request, status
 
 from app.core.config import get_settings
+
+_password_hasher = PasswordHasher()
+
+
+def hash_password(password: str) -> str:
+    return _password_hasher.hash(password)
+
+
+def verify_password(password: str, password_hash: str) -> bool:
+    try:
+        return _password_hasher.verify(password_hash, password)
+    except VerifyMismatchError:
+        return False
 
 DEV_TOKEN_PREFIX = "dev:"
 
