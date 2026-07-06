@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { SourceList } from "@/components/sources/SourceList";
@@ -12,8 +12,10 @@ import type { Notebook } from "@/lib/types";
 
 type LeftTab = "sources" | "notes";
 
-export default function NotebookDetailPage({ params }: { params: { id: string } }) {
-  const notebookId = params.id;
+// Next.js 15: `params` ist in Page-Komponenten jetzt ein Promise (auch bei
+// Client Components) und muss ueber React's use() aufgeloest werden.
+export default function NotebookDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const notebookId = use(params).id;
   const [notebook, setNotebook] = useState<Notebook | null>(null);
   const [leftTab, setLeftTab] = useState<LeftTab>("sources");
 

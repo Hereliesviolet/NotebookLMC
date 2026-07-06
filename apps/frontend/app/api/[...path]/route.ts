@@ -102,24 +102,26 @@ async function proxy(request: NextRequest, path: string[]): Promise<Response> {
   });
 }
 
-type RouteParams = { params: { path: string[] } };
+// Next.js 15: `params` ist in Route Handlern jetzt ein Promise (statt eines
+// synchronen Objekts) und muss vor dem Zugriff awaited werden.
+type RouteParams = { params: Promise<{ path: string[] }> };
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  return proxy(request, params.path);
+  return proxy(request, (await params).path);
 }
 
 export async function POST(request: NextRequest, { params }: RouteParams) {
-  return proxy(request, params.path);
+  return proxy(request, (await params).path);
 }
 
 export async function PUT(request: NextRequest, { params }: RouteParams) {
-  return proxy(request, params.path);
+  return proxy(request, (await params).path);
 }
 
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
-  return proxy(request, params.path);
+  return proxy(request, (await params).path);
 }
 
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  return proxy(request, params.path);
+  return proxy(request, (await params).path);
 }
