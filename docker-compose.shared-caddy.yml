@@ -61,6 +61,12 @@ services:
     # der Server ist ueber das andere Netzwerk (und damit auch ueber den
     # gemeinsamen Caddy) nicht mehr erreichbar - daher hier explizit an alle
     # Interfaces binden.
+    # INTERNAL_API_URL wird NICHT hier erneut gesetzt: docker compose merged
+    # "environment"-Mappings mehrerer -f-Dateien key-weise, der in
+    # docker-compose.yml gesetzte Wert (Default "http://api:8000") bleibt also
+    # erhalten und ist weiterhin korrekt - "api" haengt ja unveraendert auch im
+    # "default"-Netzwerk dieses Projekts, unabhaengig vom zusaetzlichen
+    # shared_caddy_net.
     environment:
       HOSTNAME: "0.0.0.0"
     networks:

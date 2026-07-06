@@ -1,6 +1,10 @@
 import type { ChatResponse, Message, Note, Notebook, Source, StudioArtifact, StudioArtifactType, User } from "./types";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+// Leer = same-origin, relative Pfade (z. B. "/api/notebooks"), die Caddy
+// bereits auf denselben Origin wie das Frontend routet (siehe
+// docs/deployment.md, Abschnitt "Frontend-Build-Variable"). Nur bei einer
+// komplett separaten API-Domain/Subdomain hier eine absolute URL setzen.
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 const TOKEN_STORAGE_KEY = "notebooklmc_token";
 
 export function getToken(): string | null {

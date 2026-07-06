@@ -9,7 +9,9 @@ docker compose up -d --build
 docker compose exec api alembic upgrade head
 ```
 
-Ports (lokale Entwicklung, zusätzlich zu Caddy auf 80/443):
+Ports (lokale Entwicklung, zusätzlich zu Caddy auf 80/443 sofern der eigene
+`caddy`-Service läuft - auf Hosts mit geteiltem Caddy oder ohne Port-80-Zugriff
+reicht Port 3000 allein, siehe nächster Abschnitt):
 
 | Service | Port |
 | --- | --- |
@@ -19,6 +21,48 @@ Ports (lokale Entwicklung, zusätzlich zu Caddy auf 80/443):
 | Redis | 6379 |
 | Qdrant | 6333 |
 | MinIO (S3-API / Konsole) | 9000 / 9001 |
+
+## Direkter Zugriff ohne Caddy (Next.js Server-Side Rewrites)
+
+Seit der Umstellung auf same-origin/relative API-Pfade (siehe Abschnitt
+"Frontend-Build-Variable" unten) besitzt `apps/frontend/next.config.mjs`
+zusätzlich eine `rewrites()`-Funktion, die `/api/:path*` **server-seitig**
+(im Next.js-Server selbst, nicht im Browser) an `INTERNAL_API_URL` (Default
+`http://api:8000`) weiterleitet:
+
+```js
+async rewrites() {
+  const internalApiUrl = process.env.INTERNAL_API_URL ?? "http://api:8000";
+  return [{ source: "/api/:path*", destination: `${internalApiUrl}/api/:path*` }];
+}
+```
+
+Dadurch fängt der Next.js-Server die vom Browser gesendeten relativen
+`/api/*`-Aufrufe ab, bevor sie den Next.js-Router erreichen, und proxied sie
+selbst über das Docker-Netz zu `api:8000` - unabhängig davon, ob Caddy
+überhaupt läuft. Das ermöglicht direkten Zugriff auf die App über Port 3000
+(z. B. lokale Entwicklung, Cursor-Portforwarding, oder jede Sandbox/jeder Host,
+auf dem Port 80/443 aus anderen Gründen nicht verfügbar sind), ohne dass der
+eigene `caddy`-Service dafür gestartet werden muss:
+
+```bash
+docker compose up -d --build frontend api   # caddy bleibt ungestartet
+curl http://localhost:3000/                 # Frontend
+curl http://localhost:3000/api/notebooks    # API ueber den Next.js-Rewrite-Proxy
+```
+
+`INTERNAL_API_URL` ist im Gegensatz zu `NEXT_PUBLIC_API_URL` eine reine
+**Server-Runtime-Env** (kein `NEXT_PUBLIC_*`-Build-Arg) - sie wird bei jedem
+Start des Frontend-Containers neu aus der Umgebung gelesen, ein Image-Rebuild
+nach einer Änderung ist also nicht nötig (ein `docker compose up -d frontend`
+genügt). Der Default `http://api:8000` passt sowohl für den Standard-Betrieb
+(`docker-compose.yml` allein) als auch für den Betrieb mit geteiltem Caddy
+(`docker-compose.shared-caddy.yml`, siehe unten) unverändert, da `api` in
+beiden Fällen im `default`-Netzwerk dieses Projekts erreichbar bleibt.
+
+Dieser Mechanismus ersetzt Caddy NICHT für den produktiven Betrieb (Caddy
+übernimmt weiterhin TLS-Terminierung, Security-Header, Logging etc.) - er
+ist primär für lokale Entwicklung/Tests ohne Port-80-Zugriff gedacht.
 
 ## Caddy / Reverse Proxy
 
@@ -30,6 +74,27 @@ via ACME/Let's Encrypt. Es sind keine weiteren Anpassungen an Frontend/API
 nötig, solange `/api` als Präfix erreichbar bleibt.
 
 ## Deployment mit geteiltem Caddy (Multi-Projekt-Host)
+
+**WICHTIG - ausschließlich diesen Weg verwenden, niemals parallel zum eigenen
+`caddy`-Service:** Ist auf einem Host bereits ein unabhängiger, gemeinsam
+genutzter Caddy-Container aktiv, der Port 80/443 dauerhaft belegt (konkret auf
+diesem Server beobachtet: `fremdes-projekt-a-caddy-1` aus dem separaten Projekt `<pfad-zum-anderen-projekt>`,
+`0.0.0.0:80->80`/`0.0.0.0:443->443`), kann der eigene `caddy`-Service in
+`docker-compose.yml` dort **niemals** erfolgreich starten (Port-Konflikt) - er
+bleibt sonst dauerhaft im Zustand `Created` hängen. Auf solchen Hosts gilt
+daher ausnahmslos:
+
+- Nur `docker-compose.shared-caddy.yml` als Overlay zusätzlich zu
+  `docker-compose.yml` verwenden (Befehle unten).
+- Den eigenen `caddy`-Service dauerhaft gestoppt UND entfernt lassen
+  (`docker compose stop caddy && docker compose rm -f caddy`) - nicht nur
+  einmalig stoppen, sondern sicherstellen, dass er nach einem künftigen
+  `docker compose up -d` (ohne explizite Service-Liste) nicht versehentlich
+  wieder mitgestartet wird. Am sichersten: immer mit expliziter Service-Liste
+  wie in den Befehlen unten arbeiten, nie pauschal `docker compose up -d`
+  ohne Service-Namen auf einem solchen Host.
+- `docker compose ps -a` regelmäßig prüfen, um sicherzugehen, dass kein
+  `caddy`-Container im Zustand `Created`/Fehler hängt.
 
 Auf einem Host, auf dem Port 80/443 bereits von einem anderen, unabhängigen
 Caddy-Container belegt sind (z. B. ein gemeinsam genutzter Caddy für mehrere
@@ -80,12 +145,60 @@ Zusatz-Datei verwenden.
 eingebettet, nicht zur Laufzeit gelesen. Deshalb wird sie in
 `docker-compose.yml` als `build.args` an den `frontend`-Service übergeben,
 nicht als `environment:`. Nach einer Änderung von `NEXT_PUBLIC_API_URL` in
-`.env` muss das Frontend-Image neu gebaut werden:
+`.env` muss das Frontend-Image neu gebaut werden (ein einfacher `restart`
+reicht **nicht**, da die Variable bereits fest im JS-Bundle steht):
 
 ```bash
 docker compose build frontend
 docker compose up -d frontend
 ```
+
+**Normalfall: leer lassen (same-origin über Caddy).** `NEXT_PUBLIC_API_URL`
+sollte im Regelfall leer bleiben (`NEXT_PUBLIC_API_URL=` bzw. Variable in
+`.env` weglassen). `apps/frontend/lib/api-client.ts` fällt dann auf einen
+leeren String zurück, wodurch alle `fetch()`-Aufrufe zu relativen Pfaden wie
+`/api/notebooks` statt absoluten URLs wie `http://localhost:8000/api/notebooks`
+werden. Der Browser schickt diese Requests an denselben Origin, von dem die
+Seite geladen wurde (egal ob `http://localhost`, eine echte Domain oder eine
+Server-IP) - Caddy leitet `/api/*` serverseitig an `api:8000` weiter (siehe
+`infra/caddy/Caddyfile`), der Browser selbst muss `api:8000` nie direkt
+kennen oder erreichen können. Das behebt insbesondere das Problem, dass ein
+Browser auf einem *anderen* Gerät als dem Server sonst versucht,
+`localhost:8000` auf dem eigenen Endgerät zu erreichen ("Load failed"), statt
+den Server zu kontaktieren.
+
+**Sonderfall: absolute URL setzen.** Nur wenn die API bewusst auf einer
+komplett getrennten Domain/Subdomain betrieben wird (z. B. Frontend auf
+`notebook.example.de`, API auf `notebook-api.example.de`, siehe
+Separate-Subdomain-Variante in `infra/caddy/Caddyfile`), muss
+`NEXT_PUBLIC_API_URL` auf die volle API-URL gesetzt werden. In diesem Fall
+greift beim Browser-Zugriff echtes Cross-Origin-CORS - stelle sicher, dass
+`APP_URL` (siehe unten) auf die Frontend-Domain zeigt, damit
+`allow_origins` in `apps/api/app/core/config.py`/`app/main.py` diese Anfragen
+akzeptiert.
+
+## `APP_URL` bei Domain-Wechseln anpassen
+
+`APP_URL` (`.env`) wird von der API ausschließlich für CORS verwendet
+(`allow_origins=[settings.app_url]` in `apps/api/app/main.py`) - relevant für
+Szenarien mit direktem, nicht über Caddy same-origin geroutetem Zugriff auf
+die API, z. B.:
+
+- lokale Entwicklung ohne Docker/Caddy, bei der ein separat gestarteter
+  Frontend-Dev-Server (z. B. `npm run dev` auf Port 3000) direkt gegen die
+  API auf Port 8000 spricht (Cross-Origin);
+- der oben beschriebene Sonderfall einer getrennten API-Subdomain.
+
+Beim same-origin-Betrieb über Caddy (Normalfall, `NEXT_PUBLIC_API_URL` leer)
+sieht der Browser Frontend und API dagegen als **einen** Origin - dafür ist
+kein CORS nötig, `APP_URL` spielt für diesen Pfad keine Rolle.
+
+**Wichtig:** Wird die öffentliche Domain/IP des Servers geändert (z. B. Umzug
+von `localhost`/einer Test-IP auf eine echte Domain), muss `APP_URL` in `.env`
+auf diese neue Domain/IP aktualisiert werden, sonst schlagen die oben
+genannten direkten Cross-Origin-Zugriffe mit einem CORS-Fehler fehl. Für den
+Caddy-same-origin-Pfad (der Regelfall für Endnutzer im Browser) ist das nicht
+erforderlich, da dort kein CORS greift.
 
 ## Datenbank-Migrationen
 
@@ -129,7 +242,17 @@ Alle drei sind eigenständig ausführbar und schreiben nach
   allocated` fehl. Entweder den anderen Dienst stoppen, oder für lokale
   Tests die Caddy-Ports in `docker-compose.yml` auf freie Ports mappen
   (z. B. `"8080:80"`) - `frontend` (3000) und `api` (8000) bleiben davon
-  unberührt und sind währenddessen direkt erreichbar.
+  unberührt und sind währenddessen direkt erreichbar (siehe auch Abschnitt
+  "Direkter Zugriff ohne Caddy" oben für den same-origin-Fall über die
+  Next.js-Rewrites).
+- **Eigener `caddy`-Container hängt dauerhaft im Zustand `Created`:** Typisches
+  Symptom, wenn Port 80/443 durch einen bereits laufenden, unabhängigen
+  Caddy-Container eines anderen Projekts dauerhaft belegt sind (siehe Abschnitt
+  "Deployment mit geteiltem Caddy" oben) - der eigene `caddy`-Service kann in
+  diesem Fall grundsätzlich nie erfolgreich starten. Fix: eigenen Service
+  endgültig stoppen und entfernen (`docker compose stop caddy && docker
+  compose rm -f caddy`) und stattdessen ausschließlich
+  `docker-compose.shared-caddy.yml` für `api`/`frontend` verwenden.
 
 ## Environment-Variablen
 
@@ -138,4 +261,8 @@ Kritisch vor dem ersten produktiven Start zu setzen:
 
 - `LANGDOCK_API_KEY`, `LANGDOCK_PRIMARY_MODEL`, `LANGDOCK_FAST_MODEL`
 - `POSTGRES_PASSWORD`, `MINIO_ROOT_PASSWORD` (Default-Werte nur für lokale Entwicklung!)
-- `APP_URL` / `NEXT_PUBLIC_API_URL` (echte Domain statt `localhost`)
+- `APP_URL` (echte Domain/IP statt `localhost`, siehe Abschnitt oben - nur für
+  direkten, nicht-Caddy-proxied Zugriff auf die API relevant)
+- `NEXT_PUBLIC_API_URL` (im Normalfall **leer lassen**, siehe Abschnitt
+  "Frontend-Build-Variable" oben - nur im Sonderfall einer getrennten
+  API-Domain/Subdomain setzen, dann Image neu bauen)

@@ -24,9 +24,20 @@ services:
         # Next.js, not read at container runtime - so this must be a build
         # arg, not an `environment:` entry. Rebuild the image after changing
         # NEXT_PUBLIC_API_URL in .env.
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+        #
+        # Default empty = same-origin, relative API calls (e.g. "/api/notebooks")
+        # that Caddy routes to the api service on the same origin as the
+        # frontend (see infra/caddy/Caddyfile). Only set this to an absolute
+        # URL if the API is served from a genuinely separate domain/subdomain.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
     container_name: notebook-frontend
     restart: unless-stopped
+    environment:
+      # Server-Runtime-Env (kein Build-Arg!) fuer die rewrites() in
+      # apps/frontend/next.config.mjs - der Next.js-Server im Container proxied
+      # relative "/api/*"-Aufrufe damit selbst zu api:8000, ohne dass Caddy
+      # dafuer noetig ist (z. B. lokaler Zugriff direkt ueber Port 3000).
+      INTERNAL_API_URL: ${INTERNAL_API_URL:-http://api:8000}
     ports:
       - "${BIND_ADDRESS:-127.0.0.1}:3000:3000"
     depends_on:
