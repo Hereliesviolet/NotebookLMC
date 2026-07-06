@@ -1,0 +1,54 @@
+name: pytest
+
+# Baut die api- und worker-Images 1:1 wie in Produktion (docker-compose.yml)
+# und fuehrt pytest darin aus, statt die Abhaengigkeiten auf dem bloßen
+# Runner zu installieren - so sind Systembibliotheken wie libcairo2/pango
+# (WeasyPrint/cairosvg, siehe apps/api/Dockerfile) automatisch vorhanden und
+# es gibt keine Python-/Paketversions-Abweichung zum echten Deployment.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/api/**"
+      - "apps/worker/**"
+      - ".github/workflows/pytest.yml"
+  pull_request:
+    paths:
+      - "apps/api/**"
+      - "apps/worker/**"
+      - ".github/workflows/pytest.yml"
+
+jobs:
+  api-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build api image
+        run: docker build -t notebooklmc-api-ci apps/api
+
+      # LANGDOCK_PRIMARY_MODEL/LANGDOCK_FAST_MODEL muessen nur nicht-leer sein
+      # (Tests mocken den eigentlichen Anthropic/OpenAI-Client) - kein echter
+      # LANGDOCK_API_KEY notwendig, da keine reale Netzwerkanfrage erfolgt.
+      - name: Run api pytest suite
+        run: |
+          docker run --rm \
+            -e LANGDOCK_PRIMARY_MODEL=claude-sonnet-ci-dummy \
+            -e LANGDOCK_FAST_MODEL=claude-haiku-ci-dummy \
+            notebooklmc-api-ci pytest tests -q
+
+  worker-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build worker image
+        run: docker build -t notebooklmc-worker-ci apps/worker
+
+      - name: Run worker pytest suite
+        run: |
+          docker run --rm \
+            -e LANGDOCK_PRIMARY_MODEL=claude-sonnet-ci-dummy \
+            -e LANGDOCK_FAST_MODEL=claude-haiku-ci-dummy \
+            notebooklmc-worker-ci pytest tests -q
