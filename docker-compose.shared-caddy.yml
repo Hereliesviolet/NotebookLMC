@@ -27,10 +27,11 @@ name: notebooklmc
 services:
   api:
     # KRITISCH: "api" haengt hier zusaetzlich im geteilten Netzwerk
-    # shared_caddy_net, in dem auch fremde Projekte (fremdes-projekt-a, fremdes-projekt-b) mit
-    # eigenen Containern haengen, die per Compose-Service-Namen ebenfalls als
-    # "postgres"/"minio" im Docker-DNS auftauchen (z. B. fremdes-projekt-a-postgres-1 ->
-    # Alias "postgres", fremdes-projekt-b-minio -> Alias "minio"). Ist ein Container
+    # shared_caddy_net, in dem auch fremde Projekte (fremdes-projekt-a,
+    # fremdes-projekt-b) mit eigenen Containern haengen, die per
+    # Compose-Service-Namen ebenfalls als "postgres"/"minio" im Docker-DNS
+    # auftauchen (z. B. fremdes-projekt-a-postgres-1 -> Alias "postgres",
+    # fremdes-projekt-b-minio -> Alias "minio"). Ist ein Container
     # in mehreren Netzwerken und derselbe Kurzname existiert in mehr als
     # einem davon, loest Dockers eingebautes DNS ihn nicht zuverlaessig auf
     # das eigene Notebook-Projekt auf - es kann auf den GLEICHNAMIGEN

@@ -134,8 +134,8 @@ Caddy bezieht dann automatisch ein Let's-Encrypt-Zertifikat.
 
 **Konkretes Beispiel (produktiv umgesetzt):** `notebook.example.de` läuft
 über exakt diesen Weg auf einem Host, auf dem bereits ein gemeinsamer Caddy
-(`fremdes-projekt-a-caddy-1`, Repo `<pfad-zum-anderen-projekt>`) für andere Projekte (fremdes-projekt-a, fremdes-projekt-b) aktiv
-ist:
+(`fremdes-projekt-a-caddy-1`, Repo `<pfad-zum-anderen-projekt>`) für andere
+Projekte (fremdes-projekt-a, fremdes-projekt-b) aktiv ist:
 
 1. DNS-A-Record von `notebook.example.de` auf die Server-IP gesetzt (per
    `dig @8.8.8.8 notebook.example.de +short` und `dig @1.1.1.1 ...`
@@ -173,8 +173,9 @@ setzt deshalb explizit `HOSTNAME=0.0.0.0` für `frontend`.
 **Wichtiger DNS-Alias-Fallstrick bei mehreren Netzwerken (Hostnamen-Kollision):**
 Sobald `api` zusätzlich im geteilten Netzwerk hängt, tauchen dort ggf. bereits
 generische Service-Kurznamen anderer Projekte auf - beobachtet auf diesem
-Host: `postgres` (bereits von `fremdes-projekt-a-postgres-1` belegt) und `minio` (bereits
-von `fremdes-projekt-b-minio` belegt). Wenn `api` selbst per Compose-Service-Namen
+Host: `postgres` (bereits von `fremdes-projekt-a-postgres-1` belegt) und
+`minio` (bereits von `fremdes-projekt-b-minio` belegt). Wenn `api` selbst
+per Compose-Service-Namen
 (`POSTGRES_HOST=postgres`, `MINIO_ENDPOINT=http://minio:9000`, analog für
 `REDIS_URL`/`QDRANT_URL`) auf seine eigenen Abhängigkeiten zugreift, kann
 Dockers eingebautes DNS im Container den Kurznamen auf den **fremden**,
