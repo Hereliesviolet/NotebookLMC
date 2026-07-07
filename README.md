@@ -148,7 +148,7 @@ Alle Studio-Typen generieren ihren Artefakt aus dem gesamten Notebook-Kontext ü
 
 Vollständiges CRUD für Notebook-Notizen (`apps/api/app/notes/router.py`, `apps/frontend/components/notes/NotesPanel.tsx`).
 
-### Offene Lücken 
+### Offenen
 
 - Kein Passwort-Reset-Flow, keine E-Mail-Verifizierung
 - Audio/Podcast-Feature aus der ursprünglichen Spezifikation wurde bewusst nicht umgesetzt
