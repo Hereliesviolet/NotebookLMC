@@ -3,8 +3,8 @@
 Mirrors apps/api/app/langdock/client.py (see that file's docstring and the
 implementation plan's "Empfehlung Code-Sharing" note on why this is
 duplicated rather than imported from a shared package). The worker mainly
-needs `embed()`; `generate_haiku`/`generate_sonnet` are included for the
-MVP2 source-summary job (app.summaries.source_summary).
+needs `embed()`; `generate_haiku`/`generate_sonnet` are kept available for
+future worker-side jobs that need LLM calls.
 """
 import base64
 import json

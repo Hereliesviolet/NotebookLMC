@@ -16,7 +16,6 @@ ebenfalls nicht blockieren.
 """
 import asyncio
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings

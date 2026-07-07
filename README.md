@@ -157,3 +157,7 @@ Vollständiges CRUD für Notebook-Notizen (`apps/api/app/notes/router.py`, `apps
 
 Architektur-Details: [`docs/architecture.md`](docs/architecture.md)
 
+## License
+
+MIT – siehe [`LICENSE`](LICENSE).
+

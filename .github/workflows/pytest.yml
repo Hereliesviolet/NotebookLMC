@@ -20,6 +20,24 @@ on:
       - ".github/workflows/pytest.yml"
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Run ruff check (api)
+        run: ruff check apps/api
+
+      - name: Run ruff check (worker)
+        run: ruff check apps/worker
+
   api-tests:
     runs-on: ubuntu-latest
     # Die neuen Auth-Endpoint-Tests (tests/test_auth_endpoints.py, Block 7 der
