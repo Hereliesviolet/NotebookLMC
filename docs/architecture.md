@@ -184,7 +184,7 @@ Queue-Mechanik, nicht die Status-Wahrheit.
 **Vollständig implementiert:**
 
 - **Kernflow:** Notebook → Upload → Parsing → Chunking → Embedding → Qdrant-Indexierung → Chat mit Citation Validation
-- **Auth:** E-Mail/Passwort-Registrierung und Login (`/api/auth/register`, `/api/auth/login`, `/api/auth/logout`, `/api/auth/me`), serverseitige Redis-Sessions (httpOnly-Cookie `session_id`), CSRF-Double-Submit-Cookie-Schutz (`CsrfMiddleware`), Rate-Limiting auf Login (Redis-Fixed-Window, 5/min/IP+E-Mail)
+- **Auth:** E-Mail/Passwort-Registrierung und Login (`/api/auth/register`, `/api/auth/login`, `/api/auth/logout`, `/api/auth/me`), serverseitige Redis-Sessions (httpOnly-Cookie `session_id`), CSRF-Double-Submit-Cookie-Schutz (`CsrfMiddleware`), Rate-Limiting auf Login (Redis-Fixed-Window, 5/min/IP+E-Mail) und Register (Redis-Fixed-Window, 5/5min/IP)
 - **Studio (7 Artefakt-Typen):** Zusammenfassung, FAQ, Timeline, Briefing, Quiz, Mindmap, Infografik – jeweils mit Word- und PDF-Export; Mindmap zusätzlich mit PNG-Export (SVG → cairosvg). Audio/Podcast-Script bleibt bewusst `501 Not Implemented` (Scope-Entscheidung, siehe ursprüngliche Spec in `notebooklm clone.md`)
 - **Notizen:** Vollständiges CRUD (`apps/api/app/notes/router.py`, `apps/frontend/components/notes/NotesPanel.tsx`)
 
@@ -192,7 +192,6 @@ Queue-Mechanik, nicht die Status-Wahrheit.
 
 - Kein Passwort-Reset-Flow (E-Mail-Versand nicht implementiert); vergessene Passwörter erfordern aktuell einen manuellen DB-Eingriff
 - Keine E-Mail-Verifizierung bei der Registrierung
-- Rate-Limiting auf `/api/auth/login` ist implementiert, **nicht** aber auf `/api/auth/register` (bekannte, offene Lücke)
 - `notebook_members`-basiertes Sharing ist im Datenmodell vorhanden, aber `assert_can_access()` prüft ausschließlich Besitzerschaft (`owner_id`) – kein Multi-User-Sharing aktiv
 - Haiku-Reranking (`RERANKER_ENABLED`) ist konfigurierbar vorbereitet, aber nicht aktiv genutzt
 - Streaming-Antworten (`LangdockClient.stream()`) sind vorbereitet, aber nicht im Chat-Endpoint aktiv
@@ -219,8 +218,7 @@ Queue-Mechanik, nicht die Status-Wahrheit.
   meldet 0 vulnerabilities (nach dem Next.js 14→15 + React 18→19
   Major-Upgrade, Juli 2026 – Details in [`docs/dependabot-notes.md`](dependabot-notes.md)).
 - **Rate-Limiting:** Gilt für `/api/auth/login` (Redis-Fixed-Window,
-  5/min/IP+E-Mail), **nicht** für `/api/auth/register` – bekannte, offene
-  Lücke, die bei öffentlichem Betrieb zu schließen ist.
+  5/min/IP+E-Mail) und `/api/auth/register` (Redis-Fixed-Window, 5/5min/IP).
 - **Bekannte fehlende Auth-Features:** Kein Passwort-Reset-Flow, keine
   E-Mail-Verifizierung, kein Notebook-Sharing (nur Besitzerschaft geprüft) –
   Details in [`docs/security.md`](security.md).

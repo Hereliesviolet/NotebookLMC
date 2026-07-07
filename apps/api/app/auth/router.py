@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.deps import get_current_user, get_db, get_redis
-from app.core.rate_limit import check_login_rate_limit
+from app.core.rate_limit import check_login_rate_limit, check_register_rate_limit
 from app.core.security import (
     CSRF_COOKIE_NAME,
     SESSION_COOKIE_NAME,
@@ -41,7 +41,21 @@ def _clear_session_cookies(response: Response) -> None:
 
 
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
-async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db)) -> UserOut:
+async def register(
+    payload: RegisterRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+) -> UserOut:
+    client_ip = request.client.host if request.client else "unknown"
+    allowed, retry_after = check_register_rate_limit(redis, client_ip)
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many registration attempts",
+            headers={"Retry-After": str(retry_after)},
+        )
+
     settings = get_settings()
     if len(payload.password) < settings.min_password_length:
         raise HTTPException(

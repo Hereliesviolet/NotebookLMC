@@ -14,6 +14,7 @@ import uuid
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from app.core.deps import get_redis
 from app.main import app
 
 VALID_PASSWORD = "correct-horse-battery-staple"
@@ -25,6 +26,16 @@ def _unique_email() -> str:
 
 @pytest.fixture
 async def client():
+    # Register is rate-limited per IP only (no per-test email dimension to
+    # isolate on, unlike login) - every test in this module hits it from the
+    # same ASGI-transport "IP", so the counter must be reset between tests to
+    # keep them independent. Scoped to just this key prefix rather than a
+    # blanket FLUSHDB, since locally this Redis instance also backs real
+    # sessions/queues.
+    redis = get_redis()
+    for key in redis.scan_iter("register_attempts:*"):
+        redis.delete(key)
+
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as ac:
         yield ac
@@ -156,3 +167,22 @@ async def test_login_rate_limit_blocks_after_five_attempts_per_minute(client: As
     # Even the correct password is blocked once the rate limit is hit.
     still_blocked = await client.post("/api/auth/login", json={"email": email, "password": VALID_PASSWORD})
     assert still_blocked.status_code == 429
+
+
+async def test_register_rate_limit_blocks_after_five_attempts_per_ip(client: AsyncClient):
+    # Distinct emails per attempt - register rejects duplicates with 409
+    # before the rate limit check would otherwise matter, so re-using one
+    # email would make this a duplicate-email test, not a rate-limit test.
+    for _ in range(5):
+        response = await client.post(
+            "/api/auth/register",
+            json={"email": _unique_email(), "password": VALID_PASSWORD, "name": "X"},
+        )
+        assert response.status_code == 201
+
+    blocked_response = await client.post(
+        "/api/auth/register",
+        json={"email": _unique_email(), "password": VALID_PASSWORD, "name": "X"},
+    )
+    assert blocked_response.status_code == 429
+    assert "Retry-After" in blocked_response.headers

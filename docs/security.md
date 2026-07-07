@@ -32,8 +32,14 @@ in Redis nach und lädt den zugehörigen User aus Postgres. `POST
 **Rate-Limiting:** `apps/api/app/core/rate_limit.py` implementiert einen
 einfachen Redis-Fixed-Window-Zähler (`login_attempts:<ip>:<email>`, `INCR` +
 `EXPIRE 60`) - maximal 5 Login-Versuche pro Minute pro IP+E-Mail-Kombination,
-danach `429` mit `Retry-After`-Header. Bewusst kein zusätzliches Paket
-(z. B. `slowapi`), da nur dieser eine Zähler benötigt wird.
+danach `429` mit `Retry-After`-Header. `POST /api/auth/register` hat ein
+analoges, aber separates Limit (`register_attempts:<ip>`, `INCR` +
+`EXPIRE 300`) - maximal 5 Registrierungen pro 5 Minuten **pro IP** (kein
+E-Mail-Anteil im Key, da zum Registrierungszeitpunkt noch kein Account
+existiert). Das längere Zeitfenster gegenüber Login trägt dem Umstand
+Rechnung, dass Registrierungen deutlich seltener sind als Login-Versuche.
+Bewusst kein zusätzliches Paket (z. B. `slowapi`), da nur diese zwei Zähler
+benötigt werden.
 
 **Rollen/Sharing:** `notebook_members` (bereits im Datenmodell vorhanden) für
 rollenbasierten Zugriff auf gemeinsame Notebooks ist weiterhin nur
@@ -154,14 +160,9 @@ Fehlermeldungen und technische Metadaten (Latenz, Modellname). Das
 - Kein Passwort-Reset-Flow (E-Mail-Versand nicht implementiert) - ein
   vergessenes Passwort erfordert aktuell einen manuellen DB-Eingriff.
 - Keine E-Mail-Verifizierung bei der Registrierung.
-- **Kein Rate-Limiting auf `/api/auth/register`**: `check_login_rate_limit()`
-  wird ausschließlich im `/api/auth/login`-Endpoint aufgerufen.
-  `/api/auth/register` ist aktuell ungeschützt gegen Massenregistrierungen
-  (z. B. Ressourcenerschöpfung durch viele Fake-Accounts). Dies ist eine
-  bekannte, offene Lücke, die bei öffentlichem Betrieb zu schließen ist.
 - `notebook_members`-basiertes Sharing (siehe Auth-Abschnitt oben) ist im
   Datenmodell vorbereitet, aber nicht aktiv genutzt.
 
-Rate-Limiting (Login, Redis-Fixed-Window) und CSRF-Schutz
+Rate-Limiting (Login und Register, Redis-Fixed-Window) und CSRF-Schutz
 (Double-Submit-Cookie) sind seit der Session-Auth-Migration umgesetzt, siehe
 Abschnitte oben.

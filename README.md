@@ -151,7 +151,6 @@ Vollständiges CRUD für Notebook-Notizen (`apps/api/app/notes/router.py`, `apps
 ### Offene Lücken 
 
 - Kein Passwort-Reset-Flow, keine E-Mail-Verifizierung
-- Rate-Limiting gilt für `/api/auth/login`, aber **nicht** für `/api/auth/register`
 - Notebook-Sharing über `notebook_members` ist im Datenmodell vorbereitet, aber nicht aktiv genutzt
 - Audio/Podcast-Feature aus der ursprünglichen Spezifikation wurde bewusst nicht umgesetzt
 
