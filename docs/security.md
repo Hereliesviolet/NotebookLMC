@@ -41,10 +41,9 @@ Rechnung, dass Registrierungen deutlich seltener sind als Login-Versuche.
 Bewusst kein zusätzliches Paket (z. B. `slowapi`), da nur diese zwei Zähler
 benötigt werden.
 
-**Rollen/Sharing:** `notebook_members` (bereits im Datenmodell vorhanden) für
-rollenbasierten Zugriff auf gemeinsame Notebooks ist weiterhin nur
-vorbereitet, nicht aktiv genutzt - `notebooks/service.py::assert_can_access()`
-prüft aktuell nur Besitzerschaft (`owner_id`).
+**Rollen/Sharing:** Notebook-Sharing zwischen mehreren Usern ist nicht
+implementiert - `notebooks/service.py::assert_can_access()` prüft
+ausschließlich Besitzerschaft (`owner_id`).
 
 **Lokale Entwicklung:** `make seed` legt einen Demo-User mit Passwort aus
 `DEV_DEMO_USER_PASSWORD` (`.env`) an - es gibt keinen automatischen
@@ -160,8 +159,7 @@ Fehlermeldungen und technische Metadaten (Latenz, Modellname). Das
 - Kein Passwort-Reset-Flow (E-Mail-Versand nicht implementiert) - ein
   vergessenes Passwort erfordert aktuell einen manuellen DB-Eingriff.
 - Keine E-Mail-Verifizierung bei der Registrierung.
-- `notebook_members`-basiertes Sharing (siehe Auth-Abschnitt oben) ist im
-  Datenmodell vorbereitet, aber nicht aktiv genutzt.
+- Kein Notebook-Sharing zwischen mehreren Usern (siehe Auth-Abschnitt oben).
 
 Rate-Limiting (Login und Register, Redis-Fixed-Window) und CSRF-Schutz
 (Double-Submit-Cookie) sind seit der Session-Auth-Migration umgesetzt, siehe

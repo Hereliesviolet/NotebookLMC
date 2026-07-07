@@ -55,21 +55,6 @@ class Notebook(Base):
     )
 
     sources: Mapped[list["Source"]] = relationship(back_populates="notebook", cascade="all, delete-orphan")
-    members: Mapped[list["NotebookMember"]] = relationship(back_populates="notebook", cascade="all, delete-orphan")
-
-
-class NotebookMember(Base):
-    __tablename__ = "notebook_members"
-
-    id: Mapped[uuid.UUID] = _uuid_pk()
-    notebook_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("notebooks.id", ondelete="CASCADE"), nullable=False
-    )
-    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    role: Mapped[str] = mapped_column(String(32), nullable=False)  # owner | editor | viewer
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-
-    notebook: Mapped["Notebook"] = relationship(back_populates="members")
 
 
 class Source(Base):

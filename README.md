@@ -151,7 +151,6 @@ Vollständiges CRUD für Notebook-Notizen (`apps/api/app/notes/router.py`, `apps
 ### Offene Lücken 
 
 - Kein Passwort-Reset-Flow, keine E-Mail-Verifizierung
-- Notebook-Sharing über `notebook_members` ist im Datenmodell vorbereitet, aber nicht aktiv genutzt
 - Audio/Podcast-Feature aus der ursprünglichen Spezifikation wurde bewusst nicht umgesetzt
 
 Architektur-Details: [`docs/architecture.md`](docs/architecture.md)

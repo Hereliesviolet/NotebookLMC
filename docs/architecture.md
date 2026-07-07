@@ -143,10 +143,10 @@ Alembic-Migrationen in Postgres sichergestellt.
 
 ## 7. Datenbankmodell
 
-10 Tabellen, UUID-Primärschlüssel: `users`, `notebooks`, `notebook_members`,
-`sources`, `chunks`, `messages`, `notes`, `jobs`, `audit_events`,
-`langdock_requests`. Migrationen liegen unter `apps/api/alembic/versions/`,
-Ausführung ausschließlich über den `api`-Service (`make migrate`).
+9 Tabellen, UUID-Primärschlüssel: `users`, `notebooks`, `sources`, `chunks`,
+`messages`, `notes`, `jobs`, `audit_events`, `langdock_requests`.
+Migrationen liegen unter `apps/api/alembic/versions/`, Ausführung
+ausschließlich über den `api`-Service (`make migrate`).
 
 ## 8. Qdrant Collection Design
 
@@ -192,7 +192,7 @@ Queue-Mechanik, nicht die Status-Wahrheit.
 
 - Kein Passwort-Reset-Flow (E-Mail-Versand nicht implementiert); vergessene Passwörter erfordern aktuell einen manuellen DB-Eingriff
 - Keine E-Mail-Verifizierung bei der Registrierung
-- `notebook_members`-basiertes Sharing ist im Datenmodell vorhanden, aber `assert_can_access()` prüft ausschließlich Besitzerschaft (`owner_id`) – kein Multi-User-Sharing aktiv
+- Kein Notebook-Sharing zwischen mehreren Usern – `assert_can_access()` prüft ausschließlich Besitzerschaft (`owner_id`)
 - Haiku-Reranking (`RERANKER_ENABLED`) ist konfigurierbar vorbereitet, aber nicht aktiv genutzt
 - Streaming-Antworten (`LangdockClient.stream()`) sind vorbereitet, aber nicht im Chat-Endpoint aktiv
 - Docling/Unstructured-basiertes Parsing für gescannte PDFs (aktuell: Vision-OCR-Fallback im Worker)

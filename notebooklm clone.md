@@ -726,6 +726,8 @@ updated_at
 
 ### 13.3 notebook_members
 
+> **Hinweis:** Diese Tabelle wurde nie mit Router-/Service-Logik befüllt und wurde daher wieder aus dem Datenmodell entfernt (siehe Alembic-Migration `0006_drop_notebook_members`) - Notebook-Sharing zwischen mehreren Usern ist nicht implementiert, siehe [`docs/architecture.md`](docs/architecture.md).
+
 ```text
 id
 notebook_id
