@@ -149,7 +149,7 @@ export function StudioFullscreenOverlay({
             )}
           </div>
           <div className="flex items-center gap-2">
-            {artifact && (
+            {artifact && type !== "quiz" && (
               <div className="relative">
                 <Button variant="outline" size="sm" onClick={() => setExportMenuOpen((value) => !value)}>
                   <Download className="h-3.5 w-3.5" />
