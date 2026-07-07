@@ -1,4 +1,4 @@
-> **Hinweis:** Dieses Dokument ist die ursprüngliche Ausgangsspezifikation und beschreibt die initiale Vision des Projekts. Den aktuellen Implementierungsstand (vollständig umgesetzte Features, bekannte Abweichungen von dieser Spec und offene Lücken) beschreibt [`docs/architecture.md`](docs/architecture.md). Einige hier aufgeführte Punkte (z. B. Audio/Podcast-Feature §19.2) wurden bewusst nicht umgesetzt.
+> **Hinweis:** Dieses Dokument ist die ursprüngliche Ausgangsspezifikation und beschreibt die initiale Vision des Projekts. Den aktuellen Implementierungsstand (vollständig umgesetzte Features, bekannte Abweichungen von dieser Spec und offene Lücken) beschreibt [`docs/architecture.md`](docs/architecture.md). Einige hier aufgeführte Punkte (z. B. Audio/Podcast-Feature §19.2) wurden bewusst nicht umgesetzt. Die hier durchgängig verwendete Bezeichnung "Sonnet 5" entspricht der ursprünglichen Spec zum Zeitpunkt der Erstellung dieses Dokuments - tatsächlich betrieben wird das Projekt mit Claude Sonnet 4.6, siehe [`docs/langdock.md`](docs/langdock.md).
 
 # Architekturkonzept: Self-hosted NotebookLM-Klon mit Langdock
 

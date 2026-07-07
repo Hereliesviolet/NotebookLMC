@@ -4,7 +4,7 @@ Every AI call in this app goes through this class - no direct calls to
 OpenAI/Anthropic/etc anywhere else in the codebase. It wraps two
 Langdock-provided, provider-compatible endpoints:
 
-  - Anthropic-compatible Messages API -> Claude Sonnet 5 / Claude Haiku
+  - Anthropic-compatible Messages API -> Claude Sonnet / Claude Haiku
   - OpenAI-compatible Embeddings API  -> text-embedding-ada-002
 
 Model ids (`LANGDOCK_PRIMARY_MODEL`, `LANGDOCK_FAST_MODEL`) are read
@@ -232,7 +232,7 @@ class LangdockClient:
         return LangdockTextResponse(text=text, usage=usage)
 
     async def generate_sonnet(self, system: str, user_message: str, max_tokens: int = 2048) -> LangdockTextResponse:
-        """Claude Sonnet 5 - final answers, complex analysis (architecture doc §7.1)."""
+        """Claude Sonnet - final answers, complex analysis (architecture doc §7.1)."""
         return await self._generate(
             "sonnet", system, user_message, max_tokens, enable_thinking=self._settings.langdock_enable_extended_thinking
         )

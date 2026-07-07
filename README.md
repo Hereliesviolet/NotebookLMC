@@ -3,7 +3,7 @@
 Ein selbst-gehosteter NotebookLM-Klon: Notebooks anlegen, Quellen hochladen,
 automatisch parsen/chunken/embedden und mit einem quellengebundenen Chat
 inklusive Zitaten befragen. Alle KI-Funktionen laufen ausschließlich über
-[Langdock](https://langdock.com) (Claude Sonnet 5, Claude Haiku, OpenAI-
+[Langdock](https://langdock.com) (Claude Sonnet 4.6, Claude Haiku, OpenAI-
 kompatible Embeddings) - es gibt keine direkten Aufrufe an OpenAI, Anthropic
 oder andere Modell-Provider.
 
@@ -34,7 +34,7 @@ flowchart TB
     Worker --> MinIO
     Worker --> Qdrant
     Worker --> Langdock
-    Langdock --> Sonnet["Claude Sonnet 5"]
+    Langdock --> Sonnet["Claude Sonnet 4.6"]
     Langdock --> Haiku["Claude Haiku"]
     Langdock --> Embeddings["OpenAI Embeddings (ada-002)"]
 ```
@@ -45,7 +45,7 @@ flowchart TB
 
 - Docker & Docker Compose (v2)
 - Ein gültiger [Langdock](https://langdock.com) API-Key mit Zugriff auf
-  Claude Sonnet 5, Claude Haiku und die OpenAI-kompatiblen Embeddings
+  Claude Sonnet 4.6, Claude Haiku und die OpenAI-kompatiblen Embeddings
 - `make` (optional, aber empfohlen - alle Befehle funktionieren auch direkt mit `docker compose`)
 
 ## Schnellstart
@@ -57,7 +57,7 @@ make env
 
 # 2. .env bearbeiten und mindestens folgende Werte setzen:
 #    LANGDOCK_API_KEY=...
-#    LANGDOCK_PRIMARY_MODEL=...   (Claude Sonnet 5 Modell-ID, siehe docs/langdock.md)
+#    LANGDOCK_PRIMARY_MODEL=...   (Claude-Sonnet-Modell-ID, siehe docs/langdock.md)
 #    LANGDOCK_FAST_MODEL=...      (Claude Haiku Modell-ID, siehe docs/langdock.md)
 
 # 3. Gesamten Stack bauen und starten
@@ -129,12 +129,12 @@ NotebookLMC/
 2. Quelle hochladen (PDF, DOCX, TXT, Markdown, HTML, CSV, XLSX)
 3. Datei landet in MinIO, `sources`-Eintrag in Postgres, Job wird über Redis/RQ eingereiht
 4. Worker: Text extrahieren → Chunking → Embeddings über Langdock → Vektoren in Qdrant
-5. Chatfrage stellen → Query-Embedding → Qdrant-Suche → Context Assembly → Sonnet-5-Antwort → Citation Validation
+5. Chatfrage stellen → Query-Embedding → Qdrant-Suche → Context Assembly → Sonnet-Antwort → Citation Validation
 6. Antwort mit Quellenkarten im Frontend
 
 ### Studio (7 Artefakt-Typen, vollständig implementiert)
 
-Alle Studio-Typen generieren ihren Artefakt aus dem gesamten Notebook-Kontext über Sonnet 5 (Anthropic Tool-Use) und bieten Word- und PDF-Export; Mindmap zusätzlich PNG-Export (SVG → cairosvg):
+Alle Studio-Typen generieren ihren Artefakt aus dem gesamten Notebook-Kontext über Sonnet (Anthropic Tool-Use) und bieten Word- und PDF-Export; Mindmap zusätzlich PNG-Export (SVG → cairosvg):
 
 - **Zusammenfassung** – Markdown-formatierte Gesamtzusammenfassung aller Quellen
 - **FAQ** – strukturierte Frage-Antwort-Paare mit Quellenreferenzen

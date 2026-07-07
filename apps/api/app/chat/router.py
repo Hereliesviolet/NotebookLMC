@@ -47,7 +47,7 @@ async def chat(
 ) -> ChatResponse:
     """RAG chat endpoint - full flow per architecture doc §16/§29 and
     docs/rag-pipeline.md: intent detection -> query rewrite -> embedding ->
-    Qdrant retrieval -> context assembly -> Sonnet 5 -> citation validation.
+    Qdrant retrieval -> context assembly -> Sonnet -> citation validation.
     """
     notebook = await notebooks_service.get_notebook_or_404(db, notebook_id)
     notebooks_service.assert_can_access(notebook, user.id)

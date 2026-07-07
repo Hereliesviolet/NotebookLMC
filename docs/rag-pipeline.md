@@ -22,7 +22,7 @@ sequenceDiagram
     API->>API: Score-Heuristik (Top 10)
     API->>PG: Chunk-Texte nachladen
     API->>API: Context Assembly
-    API->>LD: Sonnet 5 Answer Generation (JSON-Schema)
+    API->>LD: Sonnet Answer Generation (JSON-Schema)
     API->>API: Citation Validation
     API->>PG: Assistant-Message + langdock_requests persistieren
     API->>U: Antwort + Quellenkarten
@@ -84,7 +84,7 @@ System-Prompt: `packages/prompts/system_final_answer.md` (wortgetreu:
 ausschließlich quellenbasiert antworten, keine erfundenen Fakten/Zitate,
 Unklarheiten benennen). Output-Schema: `packages/prompts/output_schema.json`
 (`answer`, `citations[]`, `confidence`, `missing_information[]`,
-`follow_up_questions[]`). `LangdockClient.tool_output()` ruft Claude Sonnet 5
+`follow_up_questions[]`). `LangdockClient.tool_output()` ruft Claude Sonnet
 über native Anthropic Tool-Use auf (statt freiem "return JSON"-Instruction) –
 Anthropic validiert das Tool-Input-Argument serverseitig gegen das Schema,
 sodass die Antwort als Python-Dict ohne JSON-Parsing-Risiko zurückkommt. Intern

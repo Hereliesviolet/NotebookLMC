@@ -19,7 +19,7 @@ flowchart TB
     Worker --> MinIO
     Worker --> Qdrant
     Worker --> Langdock
-    Langdock --> Sonnet["Claude Sonnet 5"]
+    Langdock --> Sonnet["Claude Sonnet 4.6"]
     Langdock --> Haiku["Claude Haiku"]
     Langdock --> Embeddings["OpenAI Embeddings (ada-002)"]
 ```

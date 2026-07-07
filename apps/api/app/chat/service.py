@@ -3,7 +3,7 @@
 User Question -> [Haiku Intent Detection] -> [Haiku Query Rewrite]
               -> Langdock Query Embedding -> Qdrant Similarity Search
               -> Score Heuristic -> Context Assembly
-              -> Sonnet 5 Answer Generation -> Citation Validation
+              -> Sonnet Answer Generation -> Citation Validation
               -> Response mit Quellenkarten
 
 Langdock-Aufrufe (Anthropic/OpenAI) laufen ueber den asyncen LangdockClient

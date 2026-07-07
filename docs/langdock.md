@@ -9,7 +9,7 @@ Modell-Provider spricht - jeder Aufruf läuft über `LangdockClient`
 
 | Zweck | Endpunkt | Genutzt für |
 | --- | --- | --- |
-| Anthropic-kompatibel | `LANGDOCK_ANTHROPIC_BASE_URL` (`https://api.langdock.com/anthropic/eu/v1`) | Claude Sonnet 5, Claude Haiku |
+| Anthropic-kompatibel | `LANGDOCK_ANTHROPIC_BASE_URL` (`https://api.langdock.com/anthropic/eu/v1`) | Claude Sonnet 4.6, Claude Haiku |
 | OpenAI-kompatibel | `EMBEDDING_BASE_URL` (`https://api.langdock.com/openai/eu/v1`) | Embeddings (`text-embedding-ada-002`) |
 
 Die Anbindung nutzt bewusst die offiziellen `anthropic`- und `openai`-Python-SDKs
@@ -36,7 +36,7 @@ verifiziert (mit und ohne `/v1`-Suffix in der env-Variable).
 
 ## Modell-IDs ermitteln
 
-`LANGDOCK_PRIMARY_MODEL` (Claude Sonnet 5) und `LANGDOCK_FAST_MODEL` (Claude
+`LANGDOCK_PRIMARY_MODEL` (Claude Sonnet 4.6) und `LANGDOCK_FAST_MODEL` (Claude
 Haiku) sind in `.env.example` mit den Beispiel-/Default-Werten aus dem
 Langdock-Workspace des Projekt-Betreibers vorbelegt:
 
@@ -46,13 +46,16 @@ LANGDOCK_FAST_MODEL=claude-haiku-4-5@20251001
 ```
 
 **Diese IDs sind nicht universell gültig** - Modell-Verfügbarkeit und
--Bezeichner hängen vom jeweiligen Langdock-Workspace und der Region ab. Für
-einen anderen Workspace/eine andere Region die echten IDs selbst ermitteln:
+-Bezeichner hängen vom jeweiligen Langdock-Workspace und der Region ab.
+"4.6" ist ausschließlich der in diesem Projekt aktuell konfigurierte Stand,
+keine feste Vorgabe - ein anderer Workspace kann eine andere Sonnet-Version
+als aktuellstes/verfügbares Modell führen. Für einen anderen Workspace/eine
+andere Region die echten IDs selbst ermitteln:
 
 1. Im Langdock-Dashboard unter API-Zugriff / Modelle nachsehen, oder
 2. Den Modell-Listen-Endpunkt der Langdock Agent API abfragen (Basis-URL:
    `LANGDOCK_AGENT_BASE_URL`, siehe `.env.example`) und die gewünschten
-   Claude-Sonnet-5-/Claude-Haiku-Varianten heraussuchen, oder
+   Claude-Sonnet-/Claude-Haiku-Varianten heraussuchen, oder
 3. Testweise einen minimalen `messages.create()`-Call mit der vermuteten ID
    gegen `LANGDOCK_ANTHROPIC_BASE_URL` ausführen - bei einer ungültigen ID
    antwortet Langdock mit `400`/`404` und listet im Fehlertext meist die im
