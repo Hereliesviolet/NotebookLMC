@@ -7,7 +7,29 @@ import { LogOut, NotebookText } from "lucide-react";
 import { logout } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 
-export function Sidebar() {
+interface SidebarProps {
+  open: boolean;
+  onClose: () => void;
+}
+
+export function Sidebar({ open, onClose }: SidebarProps) {
+  return (
+    <>
+      {open && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+          <SidebarContent
+            className="relative flex h-full w-60 flex-col border-r border-border bg-background p-4 shadow-lg"
+            onNavigate={onClose}
+          />
+        </div>
+      )}
+      <SidebarContent className="hidden h-screen w-60 flex-col border-r border-border bg-background p-4 md:flex" />
+    </>
+  );
+}
+
+function SidebarContent({ className, onNavigate }: { className: string; onNavigate?: () => void }) {
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -21,13 +43,13 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="flex h-screen w-60 flex-col border-r border-border bg-muted/40 p-4">
-      <Link href="/" className="mb-6 flex items-center gap-2 px-1 text-sm font-semibold">
+    <aside className={className}>
+      <Link href="/" className="mb-6 flex items-center gap-2 px-1 text-sm font-semibold" onClick={onNavigate}>
         <NotebookText className="h-5 w-5 text-primary" />
         NotebookLM Clone
       </Link>
       <nav className="flex flex-col gap-1 text-sm">
-        <Link href="/" className="rounded-md px-3 py-2 hover:bg-muted">
+        <Link href="/" className="rounded-md px-3 py-2 hover:bg-muted" onClick={onNavigate}>
           Notebooks
         </Link>
       </nav>

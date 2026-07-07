@@ -2,6 +2,7 @@
 
 import { ReactNode, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { Menu, NotebookText } from "lucide-react";
 import { getMe } from "@/lib/api-client";
 import { Sidebar } from "@/components/layout/Sidebar";
 
@@ -19,6 +20,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const router = useRouter();
   const isPublicRoute = PUBLIC_ROUTES.has(pathname);
   const [status, setStatus] = useState<"checking" | "authenticated">(isPublicRoute ? "authenticated" : "checking");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     if (isPublicRoute) return;
@@ -45,8 +47,24 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex">
-      <Sidebar />
-      <main className="flex-1 overflow-y-auto">{children}</main>
+      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <div className="flex min-h-screen flex-1 flex-col">
+        <header className="flex items-center gap-2 border-b border-border px-4 py-3 md:hidden">
+          <button
+            type="button"
+            onClick={() => setSidebarOpen(true)}
+            aria-label="Menü öffnen"
+            className="rounded-md p-1.5 text-foreground hover:bg-muted"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+          <span className="flex items-center gap-2 text-sm font-semibold">
+            <NotebookText className="h-5 w-5 text-primary" />
+            NotebookLM Clone
+          </span>
+        </header>
+        <main className="flex-1 overflow-y-auto">{children}</main>
+      </div>
     </div>
   );
 }

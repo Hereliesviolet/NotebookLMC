@@ -22,7 +22,7 @@ export function ChatPanel({ notebookId }: { notebookId: string }) {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const sendingElapsedSeconds = useElapsedSeconds(sending);
 
   useEffect(() => {
@@ -40,7 +40,15 @@ export function ChatPanel({ notebookId }: { notebookId: string }) {
   }, [notebookId]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    // Bewusst scrollContainerRef.scrollTop statt einem scrollIntoView()-Marker-Div:
+    // scrollIntoView() liefe alle scrollbaren Vorfahren ab (u. a. das
+    // Layout-<main overflow-y-auto> in AuthGate) und scrollte auf Mobile
+    // damit auch die neue Top-Bar aus dem sichtbaren Bereich, obwohl nur
+    // dieser lokale Nachrichten-Container gescrollt werden soll.
+    const container = scrollContainerRef.current;
+    if (container) {
+      container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+    }
   }, [messages]);
 
   async function sendMessage(text: string) {
@@ -78,7 +86,7 @@ export function ChatPanel({ notebookId }: { notebookId: string }) {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex-1 space-y-4 overflow-y-auto px-6 py-4">
+      <div ref={scrollContainerRef} className="flex-1 space-y-4 overflow-y-auto px-6 py-4">
         {messages.length === 0 && (
           <p className="text-sm text-muted-foreground">
             Stelle eine Frage zu den hochgeladenen Quellen. Antworten sind ausschließlich quellenbasiert.
@@ -99,7 +107,6 @@ export function ChatPanel({ notebookId }: { notebookId: string }) {
           <p className="text-xs text-muted-foreground">Antwort wird generiert… ({sendingElapsedSeconds}s)</p>
         )}
         {error && <p className="text-xs text-red-600">{error}</p>}
-        <div ref={bottomRef} />
       </div>
 
       <form onSubmit={handleSubmit} className="flex items-end gap-2 border-t border-border p-4">
