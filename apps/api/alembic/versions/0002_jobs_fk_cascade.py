@@ -8,6 +8,7 @@ Revision ID: 0002_jobs_fk_cascade
 Revises: 0001_initial
 Create Date: 2026-07-05
 """
+
 from typing import Sequence, Union
 
 from alembic import op

@@ -76,12 +76,17 @@ export function NotebookCard({ notebook, onDelete }: NotebookCardProps) {
         <div className="flex flex-col gap-4">
           <h2 className="text-sm font-semibold">Notebook löschen</h2>
           <p className="text-sm text-muted-foreground">
-            Möchtest du <span className="font-medium text-foreground">„{notebook.title}“</span> wirklich
-            unwiderruflich löschen? Alle Quellen, Chats und Notizen gehen dabei verloren.
+            Möchtest du <span className="font-medium text-foreground">„{notebook.title}“</span>{" "}
+            wirklich unwiderruflich löschen? Alle Quellen, Chats und Notizen gehen dabei verloren.
           </p>
           {error && <p className="text-xs text-red-600">{error}</p>}
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="ghost" onClick={() => setConfirmOpen(false)} disabled={deleting}>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setConfirmOpen(false)}
+              disabled={deleting}
+            >
               Abbrechen
             </Button>
             <Button type="button" variant="destructive" onClick={handleDelete} disabled={deleting}>

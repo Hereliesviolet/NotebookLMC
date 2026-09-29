@@ -1,4 +1,5 @@
 """MinIO client wrapper - mirrored from apps/api/app/storage/minio_client.py."""
+
 import io
 from functools import lru_cache
 from urllib.parse import urlparse
@@ -39,7 +40,9 @@ def download_bytes(object_path: str) -> bytes:
         response.release_conn()
 
 
-def upload_bytes(object_path: str, data: bytes, content_type: str = "application/octet-stream") -> None:
+def upload_bytes(
+    object_path: str, data: bytes, content_type: str = "application/octet-stream"
+) -> None:
     settings = get_settings()
     client = get_minio_client()
     client.put_object(

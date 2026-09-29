@@ -1,48 +1,33 @@
 name: notebooklmc
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Optionale Zusatz-Datei für Hosts, auf denen Port 80/443 bereits von einem
-# ANDEREN Reverse Proxy belegt sind (z.B. ein bestehender Caddy-Container für
-# ein anderes Projekt auf demselben Server).
+# -----------------------------------------------------------------------------
+# Optional overlay for hosts where ports 80/443 are already taken by another
+# reverse proxy (for example a Caddy container that serves several projects).
 #
-# Verwendung: Diese Datei zusätzlich zu docker-compose.yml einbinden UND den
-# eigenen "caddy"-Service dabei NICHT mitstarten (siehe docs/deployment.md):
+# Use it in addition to docker-compose.yml and do not start the project's own
+# "caddy" service (see docs/deployment.md):
 #
 #   docker compose -f docker-compose.yml -f docker-compose.shared-caddy.yml \
 #     up -d --no-deps api frontend
 #
-# Dadurch hängen die Container "api" und "frontend" zusätzlich im
-# Docker-Netzwerk des bereits laufenden, gemeinsam genutzten Caddy-Containers
-# und sind dort unter den Namen "api"/"frontend" erreichbar. Im Caddyfile des
-# gemeinsam genutzten Caddy muss dann manuell ein zusätzlicher Site-Block für
-# die NotebookLMC-Domain ergänzt werden (Beispiel-Snippet in
-# docs/deployment.md).
+# "api" and "frontend" then also join the Docker network of the existing Caddy
+# container and are reachable there as "api" and "frontend". The existing
+# Caddyfile needs a site block for this project that routes /api/* to api:8000
+# and everything else to frontend:3000 (see infra/caddy/Caddyfile).
 #
-# WICHTIG: Den externen Netzwerknamen unten ("fremdes-projekt-a_caddy-network") ggf. anpassen -
-# er muss exakt dem Netzwerk entsprechen, in dem der bereits laufende,
-# gemeinsam genutzte Caddy-Container hängt (prüfbar via
-# `docker inspect <bestehender-caddy-container> --format '{{json .NetworkSettings.Networks}}'`).
-# ─────────────────────────────────────────────────────────────────────────────
+# The external network name at the bottom (caddy_network) is a placeholder.
+# Set it to the network the existing Caddy container is attached to:
+#   docker inspect <caddy-container> --format '{{json .NetworkSettings.Networks}}'
+# -----------------------------------------------------------------------------
 
 services:
   api:
-    # KRITISCH: "api" haengt hier zusaetzlich im geteilten Netzwerk
-    # shared_caddy_net, in dem auch fremde Projekte (fremdes-projekt-a,
-    # fremdes-projekt-b) mit eigenen Containern haengen, die per
-    # Compose-Service-Namen ebenfalls als "postgres"/"minio" im Docker-DNS
-    # auftauchen (z. B. fremdes-projekt-a-postgres-1 -> Alias "postgres",
-    # fremdes-projekt-b-minio -> Alias "minio"). Ist ein Container
-    # in mehreren Netzwerken und derselbe Kurzname existiert in mehr als
-    # einem davon, loest Dockers eingebautes DNS ihn nicht zuverlaessig auf
-    # das eigene Notebook-Projekt auf - es kann auf den GLEICHNAMIGEN
-    # Container eines FREMDEN Projekts zeigen (beobachtet: "postgres" loeste
-    # auf fremdes-projekt-a-postgres-1 statt notebook-postgres auf -> Auth schlug fehl, da
-    # die App gegen die falsche, fremde Datenbank verband).
-    # Fix: Die global eindeutigen container_name-Werte (notebook-postgres,
-    # notebook-redis, notebook-qdrant, notebook-minio) statt der generischen
-    # Service-Namen verwenden - Container-Namen sind hostweit eindeutig und
-    # daher kollisionsfrei, unabhaengig davon, wie viele Netzwerke "api"
-    # zusaetzlich hat.
+    # In the shared network, other projects' containers may register the same
+    # short DNS aliases ("postgres", "minio", ...). A container in several
+    # networks then does not reliably resolve those names to its own project,
+    # and "postgres" can end up pointing at another project's database. The
+    # container_name values are unique per host, so the dependencies are
+    # addressed by those instead of by the generic service names.
     environment:
       POSTGRES_HOST: notebook-postgres
       REDIS_URL: redis://notebook-redis:6379/0
@@ -53,21 +38,14 @@ services:
       - shared_caddy_net
 
   frontend:
-    # Next.js' server.js bindet standardmaessig an die per Docker-DNS
-    # aufgeloeste HOSTNAME-IP statt an 0.0.0.0 (siehe apps/frontend/Dockerfile
-    # -> .next/standalone/server.js). Mit nur einem Netzwerk faellt das nicht
-    # auf, weil Docker-DNS dann zwangslaeufig die einzige Container-IP
-    # zurueckgibt. Sobald "frontend" per shared_caddy_net an ein zweites
-    # Netzwerk haengt, kann diese Aufloesung auf die "falsche" IP zeigen und
-    # der Server ist ueber das andere Netzwerk (und damit auch ueber den
-    # gemeinsamen Caddy) nicht mehr erreichbar - daher hier explizit an alle
-    # Interfaces binden.
-    # INTERNAL_API_URL wird NICHT hier erneut gesetzt: docker compose merged
-    # "environment"-Mappings mehrerer -f-Dateien key-weise, der in
-    # docker-compose.yml gesetzte Wert (Default "http://api:8000") bleibt also
-    # erhalten und ist weiterhin korrekt - "api" haengt ja unveraendert auch im
-    # "default"-Netzwerk dieses Projekts, unabhaengig vom zusaetzlichen
-    # shared_caddy_net.
+    # The Next.js standalone server binds to the address that HOSTNAME
+    # resolves to inside the container. With a single network that is the only
+    # container IP; with two networks it can be the one the shared Caddy
+    # cannot reach. Bind to all interfaces explicitly.
+    # INTERNAL_API_URL is not repeated here: compose merges the environment
+    # mappings key by key, so the default from docker-compose.yml
+    # (http://api:8000) still applies and stays valid, because "api" is also
+    # attached to this project's default network.
     environment:
       HOSTNAME: "0.0.0.0"
     networks:
@@ -77,4 +55,4 @@ services:
 networks:
   shared_caddy_net:
     external: true
-    name: fremdes-projekt-a_caddy-network
+    name: caddy_network

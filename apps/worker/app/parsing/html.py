@@ -1,4 +1,5 @@
 """HTML parsing via BeautifulSoup."""
+
 from bs4 import BeautifulSoup
 
 from app.parsing.sanitize import sanitize_text

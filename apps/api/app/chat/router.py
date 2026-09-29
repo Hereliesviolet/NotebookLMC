@@ -45,10 +45,12 @@ async def chat(
     db: AsyncSession = Depends(get_db),
     user: AuthenticatedUser = Depends(get_current_user),
 ) -> ChatResponse:
-    """RAG chat endpoint - full flow per architecture doc §16/§29 and
+    """RAG chat endpoint - full flow, see
     docs/rag-pipeline.md: intent detection -> query rewrite -> embedding ->
     Qdrant retrieval -> context assembly -> Sonnet -> citation validation.
     """
     notebook = await notebooks_service.get_notebook_or_404(db, notebook_id)
     notebooks_service.assert_can_access(notebook, user.id)
-    return await service.answer_question(db, notebook_id=notebook_id, user_id=user.id, payload=payload)
+    return await service.answer_question(
+        db, notebook_id=notebook_id, user_id=user.id, payload=payload
+    )

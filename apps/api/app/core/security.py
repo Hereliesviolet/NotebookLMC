@@ -4,6 +4,7 @@
 on - callers only care about its `AuthenticatedUser` return type, so any
 future auth change (e.g. SSO) is isolated to this file.
 """
+
 import secrets
 from dataclasses import dataclass
 

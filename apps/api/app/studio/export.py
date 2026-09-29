@@ -1,5 +1,5 @@
 """Server-side Word (.docx) / PDF / PNG export for Studio artifacts
-(architecture doc §19). Renders a persisted artifact's `content_json` (shape
+Renders a persisted artifact's `content_json` (shape
 depends on `type`, see packages/prompts/studio_*_tool_schema.json) into a
 docx.Document and into an HTML string (rendered to PDF via WeasyPrint),
 styled to match the in-app Studio views
@@ -11,6 +11,7 @@ exported as a PNG rasterized (via cairosvg) from an SVG built with the same
 radial layout math as the in-app graph, see `build_mindmap_svg`/
 `build_mindmap_png` below.
 """
+
 import colorsys
 import html
 import math
@@ -165,7 +166,13 @@ def _parse_markdown_blocks(markdown_text: str) -> list[dict]:
         heading_match = re.match(r"^(#{1,3})\s+(.*)$", stripped)
         if heading_match:
             flush_list()
-            blocks.append({"type": "heading", "level": len(heading_match.group(1)), "text": heading_match.group(2).strip()})
+            blocks.append(
+                {
+                    "type": "heading",
+                    "level": len(heading_match.group(1)),
+                    "text": heading_match.group(2).strip(),
+                }
+            )
             i += 1
             continue
 
@@ -192,7 +199,11 @@ def _parse_markdown_blocks(markdown_text: str) -> list[dict]:
             i += 1
             continue
 
-        if stripped.startswith("|") and i + 1 < len(lines) and _TABLE_SEPARATOR.match(lines[i + 1].strip()):
+        if (
+            stripped.startswith("|")
+            and i + 1 < len(lines)
+            and _TABLE_SEPARATOR.match(lines[i + 1].strip())
+        ):
             flush_list()
             header = _split_table_row(stripped)
             i += 2
@@ -315,7 +326,16 @@ def _add_meta_badge(document, text: str) -> None:
 def _add_title(document, artifact_type: str, notebook_title: str, generated_at: datetime) -> None:
     heading = document.add_heading(f"{ARTIFACT_TITLES[artifact_type]}: {notebook_title}", level=0)
     heading.paragraph_format.space_after = Pt(4)
-    _set_paragraph_box(heading, border_hex=PRIMARY, top=False, left=False, right=False, bottom=True, size=18, space=8)
+    _set_paragraph_box(
+        heading,
+        border_hex=PRIMARY,
+        top=False,
+        left=False,
+        right=False,
+        bottom=True,
+        size=18,
+        space=8,
+    )
     _add_meta_badge(document, f"Generiert am {generated_at.strftime('%d.%m.%Y %H:%M')} Uhr")
 
 
@@ -360,13 +380,31 @@ def _add_heading_with_accent(document, text: str, level: int) -> None:
         run.font.color.rgb = RGBColor.from_string(PRIMARY.lstrip("#"))
     heading.paragraph_format.space_before = Pt(14)
     heading.paragraph_format.space_after = Pt(4)
-    _set_paragraph_box(heading, border_hex=PRIMARY, top=False, left=False, right=False, bottom=True, size=6, space=4)
+    _set_paragraph_box(
+        heading,
+        border_hex=PRIMARY,
+        top=False,
+        left=False,
+        right=False,
+        bottom=True,
+        size=6,
+        space=4,
+    )
 
 
 def _add_blockquote_to_docx(document, text: str) -> None:
     paragraph = document.add_paragraph()
     paragraph.paragraph_format.left_indent = Pt(16)
-    _set_paragraph_box(paragraph, border_hex=PRIMARY, top=False, bottom=False, right=False, left=True, size=18, space=10)
+    _set_paragraph_box(
+        paragraph,
+        border_hex=PRIMARY,
+        top=False,
+        bottom=False,
+        right=False,
+        left=True,
+        size=18,
+        space=10,
+    )
     _add_inline_runs(paragraph, text)
     for run in paragraph.runs:
         run.italic = True
@@ -416,7 +454,9 @@ def _faq_to_docx(document, content: dict) -> None:
     items = content.get("items") or []
     for item in items:
         q_paragraph = document.add_paragraph()
-        _set_paragraph_box(q_paragraph, fill_hex=PRIMARY_TINT, border_hex=BORDER, bottom=False, size=4, space=8)
+        _set_paragraph_box(
+            q_paragraph, fill_hex=PRIMARY_TINT, border_hex=BORDER, bottom=False, size=4, space=8
+        )
         q_paragraph.paragraph_format.space_before = Pt(4)
         q_paragraph.paragraph_format.space_after = Pt(2)
         q_run = q_paragraph.add_run("Q ")
@@ -431,14 +471,22 @@ def _faq_to_docx(document, content: dict) -> None:
         a_paragraph.paragraph_format.left_indent = Pt(16)
         source_ids = item.get("source_ids") or []
         _set_paragraph_box(
-            a_paragraph, fill_hex=PRIMARY_TINT, border_hex=BORDER, top=False, bottom=(not source_ids), size=4, space=8
+            a_paragraph,
+            fill_hex=PRIMARY_TINT,
+            border_hex=BORDER,
+            top=False,
+            bottom=(not source_ids),
+            size=4,
+            space=8,
         )
         _add_inline_runs(a_paragraph, item.get("answer", ""))
 
         if source_ids:
             meta_paragraph = document.add_paragraph()
             meta_paragraph.paragraph_format.left_indent = Pt(16)
-            _set_paragraph_box(meta_paragraph, fill_hex=PRIMARY_TINT, border_hex=BORDER, top=False, size=4, space=8)
+            _set_paragraph_box(
+                meta_paragraph, fill_hex=PRIMARY_TINT, border_hex=BORDER, top=False, size=4, space=8
+            )
             meta_run = meta_paragraph.add_run("Quellen: " + ", ".join(source_ids))
             meta_run.italic = True
             meta_run.font.size = Pt(8)
@@ -479,7 +527,9 @@ def _timeline_to_docx(document, content: dict) -> None:
         dot_run.font.size = Pt(13)
 
         label_paragraph = row[1].paragraphs[0]
-        label_run = label_paragraph.add_run(event.get("date_label") or event.get("date") or "Unklar")
+        label_run = label_paragraph.add_run(
+            event.get("date_label") or event.get("date") or "Unklar"
+        )
         label_run.bold = True
         label_run.font.color.rgb = RGBColor.from_string(PRIMARY.lstrip("#"))
 
@@ -491,7 +541,15 @@ def _timeline_to_docx(document, content: dict) -> None:
         if quote:
             quote_paragraph = row[1].add_paragraph()
             quote_paragraph.paragraph_format.left_indent = Pt(10)
-            _set_paragraph_box(quote_paragraph, border_hex=BORDER, top=False, bottom=False, right=False, size=10, space=6)
+            _set_paragraph_box(
+                quote_paragraph,
+                border_hex=BORDER,
+                top=False,
+                bottom=False,
+                right=False,
+                size=10,
+                space=6,
+            )
             quote_run = quote_paragraph.add_run(f"„{quote}“")
             quote_run.italic = True
             quote_run.font.color.rgb = RGBColor.from_string(MUTED.lstrip("#"))
@@ -563,7 +621,9 @@ def _infographic_to_docx(document, content: dict) -> None:
     stats = content.get("stats") or []
     if stats:
         stats_paragraph = document.add_paragraph()
-        _set_paragraph_box(stats_paragraph, fill_hex=PRIMARY_TINT, border_hex=BORDER, size=4, space=8)
+        _set_paragraph_box(
+            stats_paragraph, fill_hex=PRIMARY_TINT, border_hex=BORDER, size=4, space=8
+        )
         for index, stat in enumerate(stats):
             if index > 0:
                 sep_run = stats_paragraph.add_run("    ·    ")
@@ -578,7 +638,9 @@ def _infographic_to_docx(document, content: dict) -> None:
 
     for index, section in enumerate(content.get("sections") or [], start=1):
         section_paragraph = document.add_paragraph()
-        _set_paragraph_box(section_paragraph, fill_hex=MUTED_BG, border_hex=BORDER, bottom=False, size=4, space=8)
+        _set_paragraph_box(
+            section_paragraph, fill_hex=MUTED_BG, border_hex=BORDER, bottom=False, size=4, space=8
+        )
         section_paragraph.paragraph_format.space_before = Pt(4)
         badge_run = section_paragraph.add_run(f" {index} ")
         badge_run.bold = True
@@ -589,12 +651,16 @@ def _infographic_to_docx(document, content: dict) -> None:
         title_run.font.color.rgb = RGBColor.from_string(PRIMARY.lstrip("#"))
 
         body_paragraph = document.add_paragraph()
-        _set_paragraph_box(body_paragraph, fill_hex=MUTED_BG, border_hex=BORDER, top=False, size=4, space=8)
+        _set_paragraph_box(
+            body_paragraph, fill_hex=MUTED_BG, border_hex=BORDER, top=False, size=4, space=8
+        )
         _add_inline_runs(body_paragraph, section.get("body", ""))
         document.add_paragraph().paragraph_format.space_after = Pt(2)
 
 
-def build_docx(artifact_type: str, notebook_title: str, content: dict, generated_at: datetime) -> Document:
+def build_docx(
+    artifact_type: str, notebook_title: str, content: dict, generated_at: datetime
+) -> Document:
     document = Document()
     is_infographic = artifact_type == "infographic"
     _setup_page(document, notebook_title, include_header_footer=not is_infographic)
@@ -602,7 +668,9 @@ def build_docx(artifact_type: str, notebook_title: str, content: dict, generated
         _add_title(document, artifact_type, notebook_title, generated_at)
 
     if artifact_type == "summary":
-        _markdown_blocks_to_docx(document, _parse_markdown_blocks(content.get("summary_markdown", "")))
+        _markdown_blocks_to_docx(
+            document, _parse_markdown_blocks(content.get("summary_markdown", ""))
+        )
     elif artifact_type == "faq":
         _faq_to_docx(document, content)
     elif artifact_type == "timeline":
@@ -643,7 +711,8 @@ def _inline_to_html(text: str) -> str:
 def _table_block_to_html(block: dict) -> str:
     header_html = "".join(f"<th>{_inline_to_html(c)}</th>" for c in block["header"])
     rows_html = "".join(
-        "<tr>" + "".join(f"<td>{_inline_to_html(c)}</td>" for c in row) + "</tr>" for row in block["rows"]
+        "<tr>" + "".join(f"<td>{_inline_to_html(c)}</td>" for c in row) + "</tr>"
+        for row in block["rows"]
     )
     return f"<table class='doc-table'><thead><tr>{header_html}</tr></thead><tbody>{rows_html}</tbody></table>"
 
@@ -677,7 +746,9 @@ def _faq_to_html(content: dict) -> str:
     for item in items:
         source_ids = item.get("source_ids") or []
         meta = (
-            f"<p class='faq-meta'>Quellen: {html.escape(', '.join(source_ids))}</p>" if source_ids else ""
+            f"<p class='faq-meta'>Quellen: {html.escape(', '.join(source_ids))}</p>"
+            if source_ids
+            else ""
         )
         parts.append(
             "<div class='faq-card'>"
@@ -861,7 +932,9 @@ _HTML_TEMPLATE = Environment(loader=BaseLoader(), autoescape=True).from_string(
 )
 
 
-def build_html(artifact_type: str, notebook_title: str, content: dict, generated_at: datetime) -> str:
+def build_html(
+    artifact_type: str, notebook_title: str, content: dict, generated_at: datetime
+) -> str:
     if artifact_type == "summary":
         body = _markdown_blocks_to_html(_parse_markdown_blocks(content.get("summary_markdown", "")))
     elif artifact_type == "faq":
@@ -1017,7 +1090,9 @@ def build_mindmap_svg(content: dict) -> str:
             if leaf_count == 1:
                 leaf_angle = branch_angle
             else:
-                leaf_angle = branch_angle - fan_spread / 2 + (fan_spread * leaf_index) / (leaf_count - 1)
+                leaf_angle = (
+                    branch_angle - fan_spread / 2 + (fan_spread * leaf_index) / (leaf_count - 1)
+                )
             leaf_x = branch_x + math.cos(leaf_angle) * leaf_radius
             leaf_y = branch_y + math.sin(leaf_angle) * leaf_radius
             leaf_id = f"{branch_id}-leaf-{leaf_index}"
@@ -1047,8 +1122,12 @@ def build_mindmap_svg(content: dict) -> str:
         source, target = nodes[source_id], nodes[target_id]
         sx, sy = shifted(source)
         tx, ty = shifted(target)
-        sx2, sy2 = _mindmap_box_intersection(sx, sy, source["width"] / 2, source["height"] / 2, tx, ty)
-        tx2, ty2 = _mindmap_box_intersection(tx, ty, target["width"] / 2, target["height"] / 2, sx, sy)
+        sx2, sy2 = _mindmap_box_intersection(
+            sx, sy, source["width"] / 2, source["height"] / 2, tx, ty
+        )
+        tx2, ty2 = _mindmap_box_intersection(
+            tx, ty, target["width"] / 2, target["height"] / 2, sx, sy
+        )
         edge_parts.append(
             f'<line x1="{sx2:.1f}" y1="{sy2:.1f}" x2="{tx2:.1f}" y2="{ty2:.1f}" '
             f'stroke="{BORDER}" stroke-width="1.5" />'

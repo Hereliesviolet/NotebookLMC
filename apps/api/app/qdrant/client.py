@@ -1,12 +1,13 @@
 """Qdrant client wrapper.
 
-Collection design per architecture doc §15:
+Collection design:
   - collection: notebook_chunks
   - vector size: 1536 (text-embedding-ada-002 via Langdock)
   - distance: cosine
   - payload: notebook_id, source_id, chunk_id, document_name, page_start,
     page_end, heading, chunk_type, created_at
 """
+
 from functools import lru_cache
 
 from qdrant_client import QdrantClient
@@ -33,7 +34,11 @@ def ensure_collection(client: QdrantClient | None = None) -> None:
     if settings.qdrant_collection in existing:
         return
 
-    logger.info("Creating Qdrant collection '%s' (size=%s, distance=cosine)", settings.qdrant_collection, settings.qdrant_vector_size)
+    logger.info(
+        "Creating Qdrant collection '%s' (size=%s, distance=cosine)",
+        settings.qdrant_collection,
+        settings.qdrant_vector_size,
+    )
     client.create_collection(
         collection_name=settings.qdrant_collection,
         vectors_config=qmodels.VectorParams(
@@ -55,8 +60,7 @@ def ensure_collection(client: QdrantClient | None = None) -> None:
 
 def delete_points_by_source(source_id: str, client: QdrantClient | None = None) -> None:
     """Removes all points for a source (via the `source_id` payload index) so
-    deleting a source doesn't leave orphaned vectors behind (architecture doc
-    §22.3 deletion concept).
+    deleting a source doesn't leave orphaned vectors behind.
     """
     settings = get_settings()
     client = client or get_qdrant_client()
@@ -64,7 +68,11 @@ def delete_points_by_source(source_id: str, client: QdrantClient | None = None) 
         collection_name=settings.qdrant_collection,
         points_selector=qmodels.FilterSelector(
             filter=qmodels.Filter(
-                must=[qmodels.FieldCondition(key="source_id", match=qmodels.MatchValue(value=source_id))]
+                must=[
+                    qmodels.FieldCondition(
+                        key="source_id", match=qmodels.MatchValue(value=source_id)
+                    )
+                ]
             )
         ),
         wait=True,

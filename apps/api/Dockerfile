@@ -36,21 +36,16 @@ COPY . .
 
 EXPOSE 8000
 
-# Echte Prozess-Parallelitaet statt eines einzelnen Uvicorn-Prozesses: eine
-# einzelne lang laufende Langdock-Anfrage (Studio-Generierung, Chat) blockiert
-# sonst dessen kompletten Event-Loop fuer alle Nutzer, selbst nachdem die
-# einzelnen Langdock-/Qdrant-Aufrufe async/asyncio.to_thread-faehig gemacht
-# wurden (CPU-seitige Arbeit - z.B. JSON/Pydantic-Verarbeitung, Studio-Export-
-# Rendering - blockiert weiterhin den jeweiligen Worker-Prozess).
+# Real process parallelism instead of a single Uvicorn process: one long
+# Langdock request (studio generation, chat) would otherwise block the event
+# loop for all users, and CPU-bound work (JSON/Pydantic handling, studio
+# export rendering) still blocks its own worker process.
 #
-# Gunicorn (statt Uvicorn's eingebautem --workers, seit 0.30 verfuegbar) als
-# Prozess-Supervisor: robusteres Worker-Handling in Production (automatischer
-# Neustart abgestuerzter Worker inkl. --timeout fuer haengende Worker,
-# --max-requests gegen Memory-Leaks) - Uvicorn selbst bleibt der eigentliche
-# ASGI-Server je Worker-Prozess ueber den UvicornWorker-Worker-Typ.
-# API_WORKERS ist ueberschreibbar (.env / docker-compose.yml environment),
-# Default 4 passend zu i.d.R. 2-4 CPU-Kernen auf einem Single-VM-Deployment
-# wie hier (kein Kubernetes o.ae. mit Pod-Autoscaling).
+# Gunicorn supervises the workers: crashed or hanging workers are restarted
+# (--timeout) and --max-requests recycles them against memory growth. Uvicorn
+# stays the ASGI server inside each worker through the UvicornWorker class.
+# API_WORKERS can be overridden (.env / docker-compose.yml environment). The
+# default of 4 fits a single VM with 2-4 CPU cores.
 ENV API_WORKERS=4
 
 CMD gunicorn app.main:app \

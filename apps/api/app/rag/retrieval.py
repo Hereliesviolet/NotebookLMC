@@ -1,10 +1,11 @@
-"""Qdrant retrieval step of the RAG pipeline (architecture doc §16.3).
+"""Qdrant retrieval step of the RAG pipeline.
 
 Dense vector search scoped to the current notebook (+ optional source
 filter), with a simple MVP score/order heuristic instead of full LLM
-reranking (§7.4 - Haiku reranking is a documented future upgrade, disabled
+reranking (Haiku reranking is a possible future upgrade, disabled
 by RERANKER_ENABLED=false by default).
 """
+
 from dataclasses import dataclass
 
 from qdrant_client.http import models as qmodels
@@ -32,14 +33,21 @@ class RetrievedChunk:
 
 
 def search_notebook(
-    notebook_id: str, query_vector: list[float], source_ids: list[str] | None = None, limit: int = RETRIEVAL_TOP_K
+    notebook_id: str,
+    query_vector: list[float],
+    source_ids: list[str] | None = None,
+    limit: int = RETRIEVAL_TOP_K,
 ) -> list[RetrievedChunk]:
     settings = get_settings()
     client = get_qdrant_client()
 
-    must_conditions = [qmodels.FieldCondition(key="notebook_id", match=qmodels.MatchValue(value=notebook_id))]
+    must_conditions = [
+        qmodels.FieldCondition(key="notebook_id", match=qmodels.MatchValue(value=notebook_id))
+    ]
     if source_ids:
-        must_conditions.append(qmodels.FieldCondition(key="source_id", match=qmodels.MatchAny(any=source_ids)))
+        must_conditions.append(
+            qmodels.FieldCondition(key="source_id", match=qmodels.MatchAny(any=source_ids))
+        )
 
     results = client.search(
         collection_name=settings.qdrant_collection,
@@ -72,9 +80,13 @@ def list_notebook_source_ids(notebook_id: str, source_ids: list[str] | None = No
     """
     settings = get_settings()
     client = get_qdrant_client()
-    must_conditions = [qmodels.FieldCondition(key="notebook_id", match=qmodels.MatchValue(value=notebook_id))]
+    must_conditions = [
+        qmodels.FieldCondition(key="notebook_id", match=qmodels.MatchValue(value=notebook_id))
+    ]
     if source_ids:
-        must_conditions.append(qmodels.FieldCondition(key="source_id", match=qmodels.MatchAny(any=source_ids)))
+        must_conditions.append(
+            qmodels.FieldCondition(key="source_id", match=qmodels.MatchAny(any=source_ids))
+        )
     scroll_filter = qmodels.Filter(must=must_conditions)
 
     found: set[str] = set()
@@ -121,14 +133,20 @@ def backfill_missing_sources(
 
     backfilled: list[RetrievedChunk] = []
     for source_id in missing:
-        backfilled.extend(search_notebook(notebook_id, query_vector, source_ids=[source_id], limit=per_source_limit))
+        backfilled.extend(
+            search_notebook(
+                notebook_id, query_vector, source_ids=[source_id], limit=per_source_limit
+            )
+        )
     return backfilled
 
 
 def apply_score_heuristic(
-    chunks: list[RetrievedChunk], top_k: int = CONTEXT_TOP_K, max_chunks_per_source: int | None = None
+    chunks: list[RetrievedChunk],
+    top_k: int = CONTEXT_TOP_K,
+    max_chunks_per_source: int | None = None,
 ) -> list[RetrievedChunk]:
-    """MVP heuristic (architecture doc §7.4) with a per-source diversity guarantee.
+    """MVP heuristic with a per-source diversity guarantee.
 
     Plain global top-k by score lets one large/generic source occupy every
     slot on broad questions, silently excluding a notebook's other sources
@@ -169,7 +187,11 @@ def apply_score_heuristic(
         round_index += 1
 
     if len(selected) < top_k:
-        remaining = sorted((c for c in chunks if c.chunk_id not in selected_ids), key=lambda c: c.score, reverse=True)
+        remaining = sorted(
+            (c for c in chunks if c.chunk_id not in selected_ids),
+            key=lambda c: c.score,
+            reverse=True,
+        )
         selected.extend(remaining[: top_k - len(selected)])
 
     return sorted(selected, key=lambda c: c.score, reverse=True)

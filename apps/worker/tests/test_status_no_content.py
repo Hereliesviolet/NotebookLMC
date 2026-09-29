@@ -1,4 +1,5 @@
 """Honest status for sources that parse without error but yield 0 chunks."""
+
 from types import SimpleNamespace
 
 from app.jobs.status import NO_CONTENT_MESSAGE, mark_source_no_content

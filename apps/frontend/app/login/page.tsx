@@ -24,7 +24,9 @@ export default function LoginPage() {
       await login(email.trim(), password);
       router.replace("/");
     } catch {
-      setError("E-Mail oder Passwort ist falsch, oder es gab zu viele Versuche. Bitte erneut versuchen.");
+      setError(
+        "E-Mail oder Passwort ist falsch, oder es gab zu viele Versuche. Bitte erneut versuchen."
+      );
     } finally {
       setSubmitting(false);
     }
@@ -62,7 +64,11 @@ export default function LoginPage() {
               />
             </div>
             {error && <p className="text-xs text-red-600">{error}</p>}
-            <Button type="submit" disabled={submitting || !email.trim() || !password} className="w-full">
+            <Button
+              type="submit"
+              disabled={submitting || !email.trim() || !password}
+              className="w-full"
+            >
               {submitting ? "Wird angemeldet…" : "Anmelden"}
             </Button>
             <p className="text-center text-xs text-muted-foreground">

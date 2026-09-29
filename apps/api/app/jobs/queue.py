@@ -1,10 +1,9 @@
 """Redis/RQ queue helpers used by the API to enqueue worker jobs.
 
-Two queues per architecture doc §23 (embedding jobs must not run with
-unbounded parallelism):
-  - "default": parsing, chunking, indexing
-  - "embeddings": Langdock embedding calls, concurrency 2-4
+Two queue names are defined ("default" and "embeddings"). The API currently
+enqueues everything on "default"; the worker listens on both.
 """
+
 from functools import lru_cache
 
 import redis
@@ -30,14 +29,16 @@ def get_queue(name: str = DEFAULT_QUEUE) -> Queue:
 
 async def enqueue_process_source(db: AsyncSession, source_id: str, notebook_id: str) -> str:
     """Creates a `jobs` row (Postgres stays the source of truth for status,
-    per architecture doc §11 Redis) and enqueues the worker job that parses,
+    not Redis) and enqueues the worker job that parses,
     chunks, embeds and indexes the source.
 
     The worker package owns the job function implementation; the API only
     references its dotted path so the two services stay independently
     deployable (no shared Python import between api and worker).
     """
-    job = models.Job(type="process_source", status="queued", source_id=source_id, notebook_id=notebook_id)
+    job = models.Job(
+        type="process_source", status="queued", source_id=source_id, notebook_id=notebook_id
+    )
     db.add(job)
     await db.commit()
     await db.refresh(job)

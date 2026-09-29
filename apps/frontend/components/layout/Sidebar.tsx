@@ -44,7 +44,11 @@ function SidebarContent({ className, onNavigate }: { className: string; onNaviga
 
   return (
     <aside className={className}>
-      <Link href="/" className="mb-6 flex items-center gap-2 px-1 text-sm font-semibold" onClick={onNavigate}>
+      <Link
+        href="/"
+        className="mb-6 flex items-center gap-2 px-1 text-sm font-semibold"
+        onClick={onNavigate}
+      >
         <NotebookText className="h-5 w-5 text-primary" />
         NotebookLM Clone
       </Link>
@@ -54,11 +58,19 @@ function SidebarContent({ className, onNavigate }: { className: string; onNaviga
         </Link>
       </nav>
       <div className="mt-auto flex flex-col gap-2">
-        <Button variant="ghost" size="sm" className="justify-start gap-2" onClick={handleLogout} disabled={loggingOut}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="justify-start gap-2"
+          onClick={handleLogout}
+          disabled={loggingOut}
+        >
           <LogOut className="h-4 w-4" />
           {loggingOut ? "Wird abgemeldet…" : "Abmelden"}
         </Button>
-        <div className="px-3 py-2 text-xs text-muted-foreground">Self-hosted · Langdock AI Gateway</div>
+        <div className="px-3 py-2 text-xs text-muted-foreground">
+          Self-hosted · Langdock AI Gateway
+        </div>
       </div>
     </aside>
   );

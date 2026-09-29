@@ -8,6 +8,7 @@ Revision ID: 0003_langdock_fk_cascade
 Revises: 0002_jobs_fk_cascade
 Create Date: 2026-07-05
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -19,7 +20,9 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.drop_constraint("langdock_requests_notebook_id_fkey", "langdock_requests", type_="foreignkey")
+    op.drop_constraint(
+        "langdock_requests_notebook_id_fkey", "langdock_requests", type_="foreignkey"
+    )
     op.create_foreign_key(
         "langdock_requests_notebook_id_fkey",
         "langdock_requests",
@@ -41,8 +44,16 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_constraint("langdock_requests_job_id_fkey", "langdock_requests", type_="foreignkey")
-    op.create_foreign_key("langdock_requests_job_id_fkey", "langdock_requests", "jobs", ["job_id"], ["id"])
-    op.drop_constraint("langdock_requests_notebook_id_fkey", "langdock_requests", type_="foreignkey")
     op.create_foreign_key(
-        "langdock_requests_notebook_id_fkey", "langdock_requests", "notebooks", ["notebook_id"], ["id"]
+        "langdock_requests_job_id_fkey", "langdock_requests", "jobs", ["job_id"], ["id"]
+    )
+    op.drop_constraint(
+        "langdock_requests_notebook_id_fkey", "langdock_requests", type_="foreignkey"
+    )
+    op.create_foreign_key(
+        "langdock_requests_notebook_id_fkey",
+        "langdock_requests",
+        "notebooks",
+        ["notebook_id"],
+        ["id"],
     )

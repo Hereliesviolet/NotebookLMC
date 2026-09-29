@@ -10,6 +10,7 @@ never includes `notebooks`/`users`, so SQLAlchemy couldn't resolve the
 referenced tables, and it doesn't run DDL anyway. Referential integrity is
 enforced by Postgres via the migrations the api service owns.
 """
+
 import uuid
 from datetime import datetime
 

@@ -2,6 +2,7 @@
 can embed \\x00 in extracted text, which Postgres rejects on insert
 (`ValueError: A string literal cannot contain NUL (0x00) characters.`).
 """
+
 from app.chunking.chunker import chunk_sections
 from app.parsing.sanitize import sanitize_text
 from app.parsing.types import ParsedSection
@@ -37,9 +38,7 @@ def test_chunk_sections_strips_nul_from_text_and_heading():
 
 
 def test_chunk_sections_strips_nul_from_non_text_chunk_types():
-    sections = [
-        ParsedSection(text="| a\x00 | b |", heading="Table\x00", chunk_type="table")
-    ]
+    sections = [ParsedSection(text="| a\x00 | b |", heading="Table\x00", chunk_type="table")]
 
     drafts = chunk_sections(sections)
 

@@ -1,9 +1,10 @@
 """Notebook-wide context assembly for Studio artifacts (summary/faq/timeline/
-briefing, architecture doc §19). Unlike chat/service.py's query-based
+briefing). Unlike chat/service.py's query-based
 retrieval, Studio needs a representative sample of every indexed source, not
 the chunks most similar to a specific question - so this reads Postgres
 directly ordered by chunk_index instead of doing a Qdrant vector search.
 """
+
 import uuid
 from types import SimpleNamespace
 
@@ -21,7 +22,9 @@ MIN_PER_SOURCE_CHAR_BUDGET = 2000
 async def fetch_indexed_sources(
     db: AsyncSession, notebook_id: str, source_ids: list[str] | None = None
 ) -> list[models.Source]:
-    stmt = select(models.Source).where(models.Source.notebook_id == notebook_id, models.Source.status == "indexed")
+    stmt = select(models.Source).where(
+        models.Source.notebook_id == notebook_id, models.Source.status == "indexed"
+    )
     if source_ids:
         stmt = stmt.where(models.Source.id.in_([uuid.UUID(s) for s in source_ids]))
     stmt = stmt.order_by(models.Source.created_at.asc())

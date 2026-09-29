@@ -5,7 +5,7 @@
 # Caddy still terminates all traffic centrally, so swapping in a real domain
 # later (see the production block below) is a one-line change.
 #
-# Routing rule (single-domain variant, per architecture doc §11):
+# Routing rule (single-domain variant):
 #   /api/*  -> api:8000
 #   /*      -> frontend:3000
 # =============================================================================
@@ -31,7 +31,7 @@
 # -----------------------------------------------------------------------------
 # Production example (real domain, automatic HTTPS via Caddy/ACME):
 #
-# notebook.example.de {
+# notebook.example.com {
 # 	encode gzip
 #
 # 	handle /api/* {
@@ -51,11 +51,11 @@
 #
 # Separate-subdomain variant:
 #
-# notebook.example.de {
+# notebook.example.com {
 # 	reverse_proxy frontend:3000
 # }
 #
-# notebook-api.example.de {
+# notebook-api.example.com {
 # 	reverse_proxy api:8000
 # }
 # -----------------------------------------------------------------------------

@@ -10,6 +10,7 @@ header the browser silently drops the real request client-side
 (`TypeError: Failed to fetch`) - the server itself never sees anything wrong,
 which is why curl/direct HTTP calls are unaffected.
 """
+
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
@@ -43,5 +44,7 @@ class CsrfMiddleware(BaseHTTPMiddleware):
             cookie_token = request.cookies.get(CSRF_COOKIE_NAME)
             header_token = request.headers.get(CSRF_HEADER_NAME)
             if not cookie_token or not header_token or cookie_token != header_token:
-                return JSONResponse(status_code=403, content={"detail": "CSRF token missing or invalid"})
+                return JSONResponse(
+                    status_code=403, content={"detail": "CSRF token missing or invalid"}
+                )
         return await call_next(request)

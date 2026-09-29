@@ -4,11 +4,13 @@ In Docker, packages/prompts is mounted read-only at /app/packages/prompts
 (see docker-compose.yml). For local (non-Docker) development, we fall back
 to the relative path from the repo root.
 """
+
 import json
 import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
+
 
 def _candidate_dirs() -> list[Path]:
     candidates = [Path("/app/packages/prompts")]

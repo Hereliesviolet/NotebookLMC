@@ -7,6 +7,7 @@ C0 control characters have no legitimate place in extracted document text
 either, so they are stripped alongside NUL - except `\n`, `\r` and `\t`, which
 are meaningful whitespace.
 """
+
 import re
 
 _CONTROL_CHARS_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")

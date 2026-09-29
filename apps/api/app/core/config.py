@@ -4,6 +4,7 @@ All values that could differ between dev/staging/production - including
 Langdock model ids - are read exclusively from the environment. Nothing
 here hardcodes a real Langdock model id or API key.
 """
+
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -79,12 +80,11 @@ class Settings(BaseSettings):
     session_cookie_domain: str = ""
     min_password_length: int = 10
 
-    # Upload limits (architecture doc §22.1)
+    # Upload limits
     max_upload_size_mb: int = 50
 
-    # RAG pipeline (architecture doc §16.1) - intent detection and query
-    # rewrite are prepared but optional for the MVP core flow per the
-    # implementation plan; the core retrieval->answer->citation flow always
+    # RAG pipeline - intent detection and query
+    # rewrite are optional; the core retrieval->answer->citation flow always
     # runs regardless of these flags.
     enable_intent_detection: bool = False
     enable_query_rewrite: bool = False
@@ -99,7 +99,7 @@ class Settings(BaseSettings):
     # (siehe langdock/client.py ResponseTruncatedError).
     chat_answer_max_tokens: int = 4096
 
-    # Studio (summary/faq/timeline/briefing, architecture doc §19) - notebook-weite
+    # Studio (summary/faq/timeline/briefing) - notebook-weite
     # Context-Assembly (studio/context.py): max. Chunks pro Quelle (nach chunk_index)
     # und Gesamt-Zeichenbudget (gleichmaessig auf alle indizierten Quellen verteilt).
     studio_max_chunks_per_source: int = 15

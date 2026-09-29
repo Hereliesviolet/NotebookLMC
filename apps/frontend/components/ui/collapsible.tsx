@@ -33,7 +33,9 @@ export function Collapsible({
         )}
       >
         {trigger(open)}
-        <ChevronDown className={cn("h-3.5 w-3.5 shrink-0 transition-transform", open && "rotate-180")} />
+        <ChevronDown
+          className={cn("h-3.5 w-3.5 shrink-0 transition-transform", open && "rotate-180")}
+        />
       </button>
       {open && <div className="mt-2">{children}</div>}
     </div>

@@ -28,7 +28,12 @@ export function SourceCard({ source, onDelete }: SourceCardProps) {
       </div>
       <div className="flex flex-shrink-0 items-center gap-2">
         <SourceStatusBadge status={source.status} />
-        <Button variant="ghost" size="icon" onClick={() => onDelete(source.id)} aria-label="Quelle löschen">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => onDelete(source.id)}
+          aria-label="Quelle löschen"
+        >
           <Trash2 className="h-4 w-4" />
         </Button>
       </div>

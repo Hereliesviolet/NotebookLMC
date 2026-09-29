@@ -44,10 +44,17 @@ export function CreateNotebookDialog({ open, onClose, onCreated }: CreateNoteboo
         <h2 className="text-sm font-semibold">Neues Notebook</h2>
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-medium text-muted-foreground">Titel</label>
-          <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="z. B. Gutachten Schadensfall" autoFocus />
+          <Input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="z. B. Gutachten Schadensfall"
+            autoFocus
+          />
         </div>
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-muted-foreground">Beschreibung (optional)</label>
+          <label className="text-xs font-medium text-muted-foreground">
+            Beschreibung (optional)
+          </label>
           <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
         </div>
         {error && <p className="text-xs text-red-600">{error}</p>}

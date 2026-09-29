@@ -1,4 +1,13 @@
-import type { ChatResponse, Message, Note, Notebook, Source, StudioArtifact, StudioArtifactType, User } from "./types";
+import type {
+  ChatResponse,
+  Message,
+  Note,
+  Notebook,
+  Source,
+  StudioArtifact,
+  StudioArtifactType,
+  User,
+} from "./types";
 
 // Leer = same-origin, relative Pfade (z. B. "/api/notebooks"), die Caddy
 // bereits auf denselben Origin wie das Frontend routet (siehe
@@ -24,7 +33,11 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
     if (csrfToken) headers.set(CSRF_HEADER_NAME, csrfToken);
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers, credentials: "include" });
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers,
+    credentials: "include",
+  });
   if (!response.ok) {
     const body = await response.text();
     throw new Error(`API error ${response.status}: ${body}`);
@@ -34,7 +47,10 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
 }
 
 export const register = (email: string, password: string, name: string) =>
-  apiFetch<User>("/api/auth/register", { method: "POST", body: JSON.stringify({ email, password, name }) });
+  apiFetch<User>("/api/auth/register", {
+    method: "POST",
+    body: JSON.stringify({ email, password, name }),
+  });
 
 export const login = (email: string, password: string) =>
   apiFetch<User>("/api/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
@@ -46,13 +62,18 @@ export const getMe = () => apiFetch<User>("/api/auth/me");
 export const listNotebooks = () => apiFetch<Notebook[]>("/api/notebooks");
 
 export const createNotebook = (title: string, description?: string) =>
-  apiFetch<Notebook>("/api/notebooks", { method: "POST", body: JSON.stringify({ title, description }) });
+  apiFetch<Notebook>("/api/notebooks", {
+    method: "POST",
+    body: JSON.stringify({ title, description }),
+  });
 
 export const getNotebook = (id: string) => apiFetch<Notebook>(`/api/notebooks/${id}`);
 
-export const deleteNotebook = (id: string) => apiFetch<void>(`/api/notebooks/${id}`, { method: "DELETE" });
+export const deleteNotebook = (id: string) =>
+  apiFetch<void>(`/api/notebooks/${id}`, { method: "DELETE" });
 
-export const listSources = (notebookId: string) => apiFetch<Source[]>(`/api/notebooks/${notebookId}/sources`);
+export const listSources = (notebookId: string) =>
+  apiFetch<Source[]>(`/api/notebooks/${notebookId}/sources`);
 
 export async function uploadSource(notebookId: string, file: File): Promise<Source> {
   const formData = new FormData();
@@ -75,9 +96,11 @@ export async function uploadSource(notebookId: string, file: File): Promise<Sour
   return data.source as Source;
 }
 
-export const deleteSource = (sourceId: string) => apiFetch<void>(`/api/sources/${sourceId}`, { method: "DELETE" });
+export const deleteSource = (sourceId: string) =>
+  apiFetch<void>(`/api/sources/${sourceId}`, { method: "DELETE" });
 
-export const listMessages = (notebookId: string) => apiFetch<Message[]>(`/api/notebooks/${notebookId}/messages`);
+export const listMessages = (notebookId: string) =>
+  apiFetch<Message[]>(`/api/notebooks/${notebookId}/messages`);
 
 export const sendChatMessage = (notebookId: string, message: string, sourceIds?: string[]) =>
   apiFetch<ChatResponse>(`/api/notebooks/${notebookId}/chat`, {
@@ -85,7 +108,8 @@ export const sendChatMessage = (notebookId: string, message: string, sourceIds?:
     body: JSON.stringify({ message, source_ids: sourceIds, mode: "grounded" }),
   });
 
-export const listNotes = (notebookId: string) => apiFetch<Note[]>(`/api/notebooks/${notebookId}/notes`);
+export const listNotes = (notebookId: string) =>
+  apiFetch<Note[]>(`/api/notebooks/${notebookId}/notes`);
 
 export const createNote = (notebookId: string, title: string, content: string) =>
   apiFetch<Note>(`/api/notebooks/${notebookId}/notes`, {
@@ -105,10 +129,14 @@ export async function getStudioArtifact<T>(
   return (await response.json()) as StudioArtifact<T>;
 }
 
-export const generateStudioArtifact = <T,>(notebookId: string, type: StudioArtifactType) =>
+export const generateStudioArtifact = <T>(notebookId: string, type: StudioArtifactType) =>
   apiFetch<StudioArtifact<T>>(`/api/notebooks/${notebookId}/studio/${type}`, { method: "POST" });
 
-const EXPORT_EXTENSIONS: Record<"docx" | "pdf" | "png", string> = { docx: "docx", pdf: "pdf", png: "png" };
+const EXPORT_EXTENSIONS: Record<"docx" | "pdf" | "png", string> = {
+  docx: "docx",
+  pdf: "pdf",
+  png: "png",
+};
 
 export async function exportStudioArtifact(
   notebookId: string,
@@ -119,12 +147,15 @@ export async function exportStudioArtifact(
     `${API_BASE_URL}/api/notebooks/${notebookId}/studio/${type}/export?format=${format}`,
     { credentials: "include" }
   );
-  if (!response.ok) throw new Error(`Export fehlgeschlagen (${response.status}): ${await response.text()}`);
+  if (!response.ok)
+    throw new Error(`Export fehlgeschlagen (${response.status}): ${await response.text()}`);
 
   const blob = await response.blob();
   const disposition = response.headers.get("Content-Disposition");
   const filenameMatch = disposition?.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
-  const filename = filenameMatch ? decodeURIComponent(filenameMatch[1]) : `${type}.${EXPORT_EXTENSIONS[format]}`;
+  const filename = filenameMatch
+    ? decodeURIComponent(filenameMatch[1])
+    : `${type}.${EXPORT_EXTENSIONS[format]}`;
 
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");

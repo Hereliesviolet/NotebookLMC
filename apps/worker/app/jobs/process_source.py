@@ -1,4 +1,4 @@
-"""Main document processing job (architecture doc §14.3 pipeline):
+"""Main document processing job (pipeline):
 
 Upload -> MinIO (already done by the API) -> [this job] -> parse -> chunk
 -> Langdock embeddings -> Qdrant upsert -> source.status = indexed
@@ -7,6 +7,7 @@ RQ calls this function by its dotted path (see apps/api/app/jobs/queue.py).
 Each step below is implemented in its own module; this function only owns
 orchestration, status transitions and error handling.
 """
+
 import uuid
 
 from sqlalchemy.orm import Session

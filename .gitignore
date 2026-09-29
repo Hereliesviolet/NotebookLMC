@@ -8,8 +8,6 @@ node_modules/
 .next/
 out/
 npm-debug.log*
-pnpm-lock.yaml
-.pnpm-store/
 
 # Python
 __pycache__/
@@ -36,6 +34,3 @@ build/
 
 # Docker volumes mounted locally (if any)
 infra/backup/output/
-
-# Evaluation results (generated)
-packages/evals/evaluation_results.json

@@ -1,11 +1,12 @@
-"""PDF parsing (MVP choice: pypdf, see docs/architecture.md §14.4 recommendation).
+"""PDF parsing (pypdf).
 
 Scanned/image-only PDFs have no embedded text layer, so pypdf.extract_text()
 returns nothing for them. Pages below `_MIN_TEXT_LAYER_CHARS` are rendered to
 JPEG via `pdftoppm` (poppler-utils) and sent through Claude Vision (Langdock
-client) as an OCR fallback - see docs/architecture.md §14.2. Pages with a
+client) as an OCR fallback. Pages with a
 usable text layer are left untouched (no extra Vision call/cost).
 """
+
 import glob
 import io
 import subprocess
@@ -108,7 +109,11 @@ def parse_pdf(data: bytes) -> list[ParsedSection]:
 
             if not text:
                 continue
-            sections.append(ParsedSection(text=text, page_start=page_index, page_end=page_index, chunk_type="text"))
+            sections.append(
+                ParsedSection(
+                    text=text, page_start=page_index, page_end=page_index, chunk_type="text"
+                )
+            )
     finally:
         if tmp_dir is not None:
             tmp_dir.cleanup()

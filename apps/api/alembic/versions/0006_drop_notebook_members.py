@@ -8,11 +8,13 @@ Revision ID: 0006_drop_notebook_members
 Revises: 0005_users_password_hash
 Create Date: 2026-07-07
 """
+
 from typing import Sequence, Union
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 revision: str = "0006_drop_notebook_members"
 down_revision: Union[str, None] = "0005_users_password_hash"
@@ -34,7 +36,9 @@ def downgrade() -> None:
             sa.ForeignKey("notebooks.id", ondelete="CASCADE"),
             nullable=False,
         ),
-        sa.Column("user_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("users.id"), nullable=False),
+        sa.Column(
+            "user_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("users.id"), nullable=False
+        ),
         sa.Column("role", sa.String(32), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
     )

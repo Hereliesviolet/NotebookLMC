@@ -1,9 +1,9 @@
 """SQLAlchemy models.
 
-Mirrors the data model defined in the architecture doc §13.1-13.10 exactly
-(table names and columns). UUID primary keys are an addition on top of the
-doc, which does not specify an id type.
+Table definitions for the API service (see docs/architecture.md). UUID
+primary keys throughout.
 """
+
 import uuid
 from datetime import datetime
 
@@ -45,7 +45,9 @@ class Notebook(Base):
     __tablename__ = "notebooks"
 
     id: Mapped[uuid.UUID] = _uuid_pk()
-    owner_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     visibility: Mapped[str] = mapped_column(String(32), default="private", nullable=False)
@@ -54,7 +56,9 @@ class Notebook(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-    sources: Mapped[list["Source"]] = relationship(back_populates="notebook", cascade="all, delete-orphan")
+    sources: Mapped[list["Source"]] = relationship(
+        back_populates="notebook", cascade="all, delete-orphan"
+    )
 
 
 class Source(Base):
@@ -64,7 +68,9 @@ class Source(Base):
     notebook_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("notebooks.id", ondelete="CASCADE"), nullable=False
     )
-    uploaded_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    uploaded_by: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    )
     filename: Mapped[str] = mapped_column(String(512), nullable=False)
     original_filename: Mapped[str] = mapped_column(String(512), nullable=False)
     mime_type: Mapped[str] = mapped_column(String(128), nullable=False)
@@ -81,14 +87,18 @@ class Source(Base):
     )
 
     notebook: Mapped["Notebook"] = relationship(back_populates="sources")
-    chunks: Mapped[list["Chunk"]] = relationship(back_populates="source", cascade="all, delete-orphan")
+    chunks: Mapped[list["Chunk"]] = relationship(
+        back_populates="source", cascade="all, delete-orphan"
+    )
 
 
 class Chunk(Base):
     __tablename__ = "chunks"
 
     id: Mapped[uuid.UUID] = _uuid_pk()
-    notebook_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("notebooks.id", ondelete="CASCADE"), nullable=False)
+    notebook_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("notebooks.id", ondelete="CASCADE"), nullable=False
+    )
     source_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("sources.id", ondelete="CASCADE"), nullable=False
     )
@@ -113,7 +123,9 @@ class Message(Base):
     notebook_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("notebooks.id", ondelete="CASCADE"), nullable=False
     )
-    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    )
     role: Mapped[str] = mapped_column(String(16), nullable=False)  # user | assistant | system
     content: Mapped[str] = mapped_column(Text, nullable=False)
     model: Mapped[str | None] = mapped_column(String(128), nullable=True)
@@ -129,7 +141,9 @@ class Note(Base):
     notebook_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("notebooks.id", ondelete="CASCADE"), nullable=False
     )
-    created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    created_by: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     source_refs_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
@@ -144,7 +158,9 @@ class Job(Base):
 
     id: Mapped[uuid.UUID] = _uuid_pk()
     type: Mapped[str] = mapped_column(String(64), nullable=False)
-    status: Mapped[str] = mapped_column(String(32), default="queued", nullable=False)  # queued|running|completed|failed
+    status: Mapped[str] = mapped_column(
+        String(32), default="queued", nullable=False
+    )  # queued|running|completed|failed
     source_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("sources.id", ondelete="CASCADE"), nullable=True
     )
@@ -162,7 +178,9 @@ class AuditEvent(Base):
     __tablename__ = "audit_events"
 
     id: Mapped[uuid.UUID] = _uuid_pk()
-    user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+    )
     event_type: Mapped[str] = mapped_column(String(64), nullable=False)
     entity_type: Mapped[str] = mapped_column(String(64), nullable=False)
     entity_id: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -171,13 +189,15 @@ class AuditEvent(Base):
 
 
 class StudioArtifact(Base):
-    """Generated Studio outputs (summary/faq/timeline/briefing, architecture
-    doc §19/§26.5). At most one row per (notebook_id, type) - "Neu generieren"
+    """Generated Studio outputs (summary/faq/timeline/briefing/...).
+    At most one row per (notebook_id, type) - "Neu generieren"
     upserts instead of accumulating history.
     """
 
     __tablename__ = "studio_artifacts"
-    __table_args__ = (UniqueConstraint("notebook_id", "type", name="uq_studio_artifacts_notebook_type"),)
+    __table_args__ = (
+        UniqueConstraint("notebook_id", "type", name="uq_studio_artifacts_notebook_type"),
+    )
 
     id: Mapped[uuid.UUID] = _uuid_pk()
     notebook_id: Mapped[uuid.UUID] = mapped_column(
@@ -197,14 +217,18 @@ class LangdockRequest(Base):
     __tablename__ = "langdock_requests"
 
     id: Mapped[uuid.UUID] = _uuid_pk()
-    user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+    )
     notebook_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("notebooks.id", ondelete="CASCADE"), nullable=True
     )
     job_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("jobs.id", ondelete="CASCADE"), nullable=True
     )
-    request_type: Mapped[str] = mapped_column(String(32), nullable=False)  # completion|embedding|agent|usage_export
+    request_type: Mapped[str] = mapped_column(
+        String(32), nullable=False
+    )  # completion|embedding|agent|usage_export
     model: Mapped[str | None] = mapped_column(String(128), nullable=True)
     status_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
     latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)

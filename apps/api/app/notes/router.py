@@ -33,7 +33,9 @@ async def list_notes(
     notebook = await notebooks_service.get_notebook_or_404(db, notebook_id)
     notebooks_service.assert_can_access(notebook, user.id)
     result = await db.execute(
-        select(models.Note).where(models.Note.notebook_id == notebook_id).order_by(models.Note.created_at.desc())
+        select(models.Note)
+        .where(models.Note.notebook_id == notebook_id)
+        .order_by(models.Note.created_at.desc())
     )
     return [_to_out(n) for n in result.scalars().all()]
 

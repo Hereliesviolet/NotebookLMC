@@ -1,9 +1,10 @@
 """Dispatches to the right parser based on MIME type / file extension.
 
-Supported MVP file types (architecture doc §14.1): PDF, DOCX, TXT, Markdown,
+Supported MVP file types: PDF, DOCX, TXT, Markdown,
 HTML, CSV, XLSX. PowerPoint/Audio/Video/OCR are documented as later
-extensions (§14.2), not implemented here.
+extensions, not implemented here.
 """
+
 from app.parsing.csv_xlsx import parse_csv, parse_xlsx
 from app.parsing.docx import parse_docx
 from app.parsing.html import parse_html
@@ -44,5 +45,7 @@ def parse_document(mime_type: str, filename: str, data: bytes) -> list[ParsedSec
         suffix = "." + filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
         parser = _EXTENSION_PARSERS.get(suffix)
     if parser is None:
-        raise UnsupportedFileTypeError(f"No parser registered for mime_type={mime_type!r} filename={filename!r}")
+        raise UnsupportedFileTypeError(
+            f"No parser registered for mime_type={mime_type!r} filename={filename!r}"
+        )
     return parser(data)

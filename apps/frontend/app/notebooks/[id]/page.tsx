@@ -23,7 +23,9 @@ export default function NotebookDetailPage({ params }: { params: Promise<{ id: s
   const [mobileTab, setMobileTab] = useState<MobileTab>("chat");
 
   useEffect(() => {
-    getNotebook(notebookId).then(setNotebook).catch(() => undefined);
+    getNotebook(notebookId)
+      .then(setNotebook)
+      .catch(() => undefined);
   }, [notebookId]);
 
   return (
@@ -89,13 +91,19 @@ export default function NotebookDetailPage({ params }: { params: Promise<{ id: s
         </section>
 
         <section
-          className={cn("flex-col overflow-hidden lg:flex", mobileTab === "chat" ? "flex" : "hidden")}
+          className={cn(
+            "flex-col overflow-hidden lg:flex",
+            mobileTab === "chat" ? "flex" : "hidden"
+          )}
         >
           <ChatPanel notebookId={notebookId} />
         </section>
 
         <section
-          className={cn("overflow-y-auto border-l border-border lg:block", mobileTab === "studio" ? "block" : "hidden")}
+          className={cn(
+            "overflow-y-auto border-l border-border lg:block",
+            mobileTab === "studio" ? "block" : "hidden"
+          )}
         >
           <StudioPanel notebookId={notebookId} />
         </section>

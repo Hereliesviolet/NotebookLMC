@@ -1,6 +1,6 @@
 /**
- * Local mirror of packages/shared-types/index.ts - see that package's
- * README for why this isn't imported directly yet.
+ * TypeScript shapes of the API responses (see apps/api/app/schemas/).
+ * Kept in sync with the Pydantic schemas by hand.
  */
 export type NotebookVisibility = "private" | "shared";
 
@@ -15,7 +15,13 @@ export interface Notebook {
   updated_at: string;
 }
 
-export type SourceStatus = "uploaded" | "processing" | "indexed" | "failed" | "no_content" | "deleted";
+export type SourceStatus =
+  | "uploaded"
+  | "processing"
+  | "indexed"
+  | "failed"
+  | "no_content"
+  | "deleted";
 
 export interface Source {
   id: string;

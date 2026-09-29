@@ -1,17 +1,22 @@
 # Deployment
 
-## Lokal (Docker Compose)
+The stack is defined in `docker-compose.yml`. Commands below assume Docker
+Compose v2 and are run from the repository root.
+
+## Local
 
 ```bash
 cp .env.example .env
-# .env bearbeiten: LANGDOCK_API_KEY, LANGDOCK_PRIMARY_MODEL, LANGDOCK_FAST_MODEL setzen
+# set LANGDOCK_API_KEY, LANGDOCK_PRIMARY_MODEL, LANGDOCK_FAST_MODEL
 docker compose up -d --build
 docker compose exec api alembic upgrade head
 ```
 
-Ports (lokale Entwicklung, zusätzlich zu Caddy auf 80/443 sofern der eigene
-`caddy`-Service läuft - auf Hosts mit geteiltem Caddy oder ohne Port-80-Zugriff
-reicht Port 3000 allein, siehe nächster Abschnitt):
+`make env`, `make up` and `make migrate` do the same. `make seed` creates a
+demo user.
+
+Published ports (bound to `BIND_ADDRESS`, default `127.0.0.1`; Caddy uses 80
+and 443):
 
 | Service | Port |
 | --- | --- |
@@ -20,306 +25,164 @@ reicht Port 3000 allein, siehe nächster Abschnitt):
 | PostgreSQL | 5432 |
 | Redis | 6379 |
 | Qdrant | 6333 |
-| MinIO (S3-API / Konsole) | 9000 / 9001 |
+| MinIO (S3 API / console) | 9000 / 9001 |
 
-## Direkter Zugriff ohne Caddy (manueller Next.js Route-Handler-Proxy)
+## Access without Caddy
 
-Seit der Umstellung auf same-origin/relative API-Pfade (siehe Abschnitt
-"Frontend-Build-Variable" unten) besitzt das Frontend einen catch-all
-App-Router-Route-Handler unter `apps/frontend/app/api/[...path]/route.ts`,
-der `/api/*` **server-seitig** (im Next.js-Server selbst, nicht im Browser)
-per manuellem `fetch()` an `INTERNAL_API_URL` (Default `http://api:8000`)
-weiterleitet - inklusive Query-Parametern, Body, Headers (insbesondere
-`Authorization`) und Streaming der Response (auch für Binärantworten wie
-PNG/PDF/DOCX-Exports).
-
-**Historie:** Bis 2026-07 übernahm das dafür ein deklaratives
-`rewrites()` in `next.config.mjs`. Dessen interner Node-`http`-Proxy hat
-jedoch keine konfigurierbare Zeitgrenze und brach lang laufende
-Studio-Generierungen (Briefing/Quiz/Mindmap, 30-60+s) nach einer festen,
-zu kurzen Frist mit `socket hang up`/`ECONNRESET` ab, obwohl die API im
-Hintergrund erfolgreich weiterlief - im Browser erschien das als
-"API error 500" trotz gesunder API. Der manuelle Route-Handler ersetzt
-`rewrites()` vollständig und steuert das Timeout explizit selbst (siehe
-Konstante `PROXY_TIMEOUT_MS` in `route.ts`, aktuell 310s - passend zum
-Gunicorn-`--timeout 300` in `apps/api/Dockerfile`, mit 10s Puffer, damit
-Gunicorns eigener, saubererer Timeout-Fehler zuerst greift statt eines
-Gleichstands mit dem Proxy-Timeout).
-
-Das ermöglicht direkten Zugriff auf die App über Port 3000 (z. B. lokale
-Entwicklung, Cursor-Portforwarding, oder jede Sandbox/jeder Host, auf dem
-Port 80/443 aus anderen Gründen nicht verfügbar sind), ohne dass der eigene
-`caddy`-Service dafür gestartet werden muss:
+The frontend contains a catch-all route handler,
+`apps/frontend/app/api/[...path]/route.ts`. It forwards `/api/*` on the
+server side to `INTERNAL_API_URL` (default `http://api:8000`) with query
+string, body, headers and cookies, and streams the response back, including
+binary exports (PDF, DOCX, PNG). With it the app works on port 3000 alone:
 
 ```bash
-docker compose up -d --build frontend api   # caddy bleibt ungestartet
-curl http://localhost:3000/                 # Frontend
-curl http://localhost:3000/api/notebooks    # API ueber den Next.js-Route-Handler-Proxy
+docker compose up -d --build frontend api   # caddy stays down
+curl http://localhost:3000/api/health
 ```
 
-`INTERNAL_API_URL` ist im Gegensatz zu `NEXT_PUBLIC_API_URL` eine reine
-**Server-Runtime-Env** (kein `NEXT_PUBLIC_*`-Build-Arg) - sie wird bei jedem
-Start des Frontend-Containers neu aus der Umgebung gelesen, ein Image-Rebuild
-nach einer Änderung ist also nicht nötig (ein `docker compose up -d frontend`
-genügt). Der Default `http://api:8000` passt sowohl für den Standard-Betrieb
-(`docker-compose.yml` allein) als auch für den Betrieb mit geteiltem Caddy
-(`docker-compose.shared-caddy.yml`, siehe unten) unverändert, da `api` in
-beiden Fällen im `default`-Netzwerk dieses Projekts erreichbar bleibt.
+It replaced a `rewrites()` entry in `next.config.mjs`. The rewrites proxy has
+a fixed timeout and cut off long studio generations (30-60 s and more) with
+`socket hang up`, while the API kept working and finished. The route handler
+sets its own timeout, `PROXY_TIMEOUT_MS` in `route.ts` (310 s), slightly above
+the Gunicorn `--timeout 300` in `apps/api/Dockerfile` so that Gunicorn's own
+error response arrives first.
 
-Dieser Mechanismus ersetzt Caddy NICHT für den produktiven Betrieb (Caddy
-übernimmt weiterhin TLS-Terminierung, Security-Header, Logging etc.) - er
-ist primär für lokale Entwicklung/Tests ohne Port-80-Zugriff gedacht.
+`INTERNAL_API_URL` is read at runtime; changing it needs no image rebuild. The
+handler is not a replacement for Caddy in production (TLS, security headers).
 
-## Caddy / Reverse Proxy
+## Caddy
 
-`infra/caddy/Caddyfile` enthält standardmäßig eine lokale Variante ohne
-echte Domain (`:80`), die `/api/*` an `api:8000` und alles andere an
-`frontend:3000` weiterleitet. Für Produktion die Domain-Variante am Ende der
-Datei aktivieren - Caddy übernimmt dann automatisch die HTTPS-Zertifikate
-via ACME/Let's Encrypt. Es sind keine weiteren Anpassungen an Frontend/API
-nötig, solange `/api` als Präfix erreichbar bleibt.
+`infra/caddy/Caddyfile` serves `:80` by default, sends `/api/*` to `api:8000`
+and everything else to `frontend:3000`. For production, enable the commented
+domain block at the end of the file: Caddy then fetches a Let's Encrypt
+certificate automatically. Frontend and API need no change as long as `/api`
+stays a path prefix on the same origin.
 
-## Deployment mit geteiltem Caddy (Multi-Projekt-Host)
+## Sharing an existing Caddy
 
-**WICHTIG - ausschließlich diesen Weg verwenden, niemals parallel zum eigenen
-`caddy`-Service:** Ist auf einem Host bereits ein unabhängiger, gemeinsam
-genutzter Caddy-Container aktiv, der Port 80/443 dauerhaft belegt (konkret auf
-diesem Server beobachtet: `fremdes-projekt-a-caddy-1` aus dem separaten Projekt `<pfad-zum-anderen-projekt>`,
-`0.0.0.0:80->80`/`0.0.0.0:443->443`), kann der eigene `caddy`-Service in
-`docker-compose.yml` dort **niemals** erfolgreich starten (Port-Konflikt) - er
-bleibt sonst dauerhaft im Zustand `Created` hängen. Auf solchen Hosts gilt
-daher ausnahmslos:
-
-- Nur `docker-compose.shared-caddy.yml` als Overlay zusätzlich zu
-  `docker-compose.yml` verwenden (Befehle unten).
-- Den eigenen `caddy`-Service dauerhaft gestoppt UND entfernt lassen
-  (`docker compose stop caddy && docker compose rm -f caddy`) - nicht nur
-  einmalig stoppen, sondern sicherstellen, dass er nach einem künftigen
-  `docker compose up -d` (ohne explizite Service-Liste) nicht versehentlich
-  wieder mitgestartet wird. Am sichersten: immer mit expliziter Service-Liste
-  wie in den Befehlen unten arbeiten, nie pauschal `docker compose up -d`
-  ohne Service-Namen auf einem solchen Host.
-- `docker compose ps -a` regelmäßig prüfen, um sicherzugehen, dass kein
-  `caddy`-Container im Zustand `Created`/Fehler hängt.
-
-Auf einem Host, auf dem Port 80/443 bereits von einem anderen, unabhängigen
-Caddy-Container belegt sind (z. B. ein gemeinsam genutzter Caddy für mehrere
-Projekte), kann NotebookLMC diesen bestehenden Caddy mitbenutzen, statt den
-eigenen `caddy`-Service zu starten:
+If another Caddy container already holds ports 80/443 on the host, the
+project's own `caddy` service cannot start and stays in state `Created`. Use
+the overlay `docker-compose.shared-caddy.yml` instead:
 
 ```bash
-docker compose stop caddy   # eigener caddy-Service bleibt ungestartet
+docker compose stop caddy && docker compose rm -f caddy
 docker compose -f docker-compose.yml -f docker-compose.shared-caddy.yml \
   up -d --no-deps api frontend
 ```
 
-`docker-compose.shared-caddy.yml` hängt `api` und `frontend` zusätzlich in
-das externe Docker-Netzwerk des bereits laufenden, gemeinsamen Caddy
-(`shared_caddy_net`, Default-Name `fremdes-projekt-a_caddy-network` - **muss** auf den
-tatsächlichen Netzwerknamen des jeweiligen Hosts angepasst werden, siehe
-Kommentar in der Datei). Im Caddyfile des gemeinsamen Caddy muss dafür
-manuell ein zusätzlicher Site-Block ergänzt werden, der `/api/*` an `api:8000`
-und alles andere an `frontend:3000` weiterleitet (Vorlage: `infra/caddy/Caddyfile`
-in diesem Repo, Routing-Prinzip 1:1 übernehmen).
+Always name the services explicitly on such a host; a bare `docker compose up
+-d` would start the project's `caddy` again.
 
-**Platzhalter-Domain ersetzen:** Solange keine echte Domain vorhanden ist,
-kann im Site-Block des gemeinsamen Caddy vorübergehend eine Platzhalter-Domain
-verwendet werden (z. B. `notebooklmc.example.com`). Da `example.com` von der
-Let's-Encrypt-ACME-Policy für Zertifikate geblockt ist, muss ein solcher
-Platzhalter-Block per `http://`-Präfix (`http://notebooklmc.example.com { ... }`)
-explizit ohne automatisches HTTPS betrieben werden. Sobald die echte Domain
-feststeht: DNS-A-Record (und ggf. AAAA) auf diesen Server zeigen lassen, den
-`http://`-Präfix entfernen und den Site-Block auf die echte Domain ändern -
-Caddy bezieht dann automatisch ein Let's-Encrypt-Zertifikat.
+Setup:
 
-**Konkretes Beispiel (produktiv umgesetzt):** `notebook.example.de` läuft
-über exakt diesen Weg auf einem Host, auf dem bereits ein gemeinsamer Caddy
-(`fremdes-projekt-a-caddy-1`, Repo `<pfad-zum-anderen-projekt>`) für andere
-Projekte (fremdes-projekt-a, fremdes-projekt-b) aktiv ist:
+1. In the overlay, set the external network `caddy_network` to the network the
+   existing Caddy is attached to
+   (`docker inspect <caddy-container> --format '{{json .NetworkSettings.Networks}}'`).
+2. Add a site block to the existing Caddy's Caddyfile that routes `/api/*` to
+   `api:8000` and everything else to `frontend:3000`, as in
+   `infra/caddy/Caddyfile`. Validate and reload it
+   (`caddy validate`, `caddy reload`).
+3. Point the domain's DNS at the host before enabling the block, or the
+   Let's Encrypt challenge fails. Check both the A and the AAAA record: a
+   stale AAAA record pointing to a different host makes IPv6 clients see the
+   other host's certificate even though the A record is right. Until a real
+   domain exists, a `http://`-prefixed block on a placeholder host name runs
+   without automatic HTTPS (`example.com` is refused by ACME).
 
-1. DNS-A-Record von `notebook.example.de` auf die Server-IP gesetzt (per
-   `dig @8.8.8.8 notebook.example.de +short` und `dig @1.1.1.1 ...`
-   gegen zwei unabhängige Resolver verifiziert, bevor der Site-Block
-   aktiviert wurde - ohne korrektes DNS bricht die Let's-Encrypt-Challenge).
-   **Sowohl A- als auch AAAA-Record prüfen:** Ein AAAA-Record, der (z. B.
-   als Altlast eines anderen Hosting-Anbieters) auf eine falsche IPv6-Adresse
-   zeigt, führt bei IPv6-bevorzugenden Clients zu einem TLS-Fehler
-   (falsches Zertifikat des fremden Hosts), selbst wenn der A-Record korrekt
-   ist und Caddy auf diesem Server ein gültiges Zertifikat besitzt - Fix:
-   AAAA-Record entfernen oder auf die tatsächliche Server-IPv6-Adresse
-   (`ip -6 addr show scope global`) korrigieren.
-2. `git -C <pfad-zum-anderen-projekt> update-index --skip-worktree caddy_config/Caddyfile`
-   ausgeführt, bevor die Datei bearbeitet wurde (siehe Warnhinweis oben).
-3. Platzhalter-Block auf `notebook.example.de` (ohne `http://`-Präfix)
-   geändert, Security-Header (`Strict-Transport-Security`, `nosniff`,
-   `DENY`, `Referrer-Policy`) und JSON-Access-Log analog zum
-   `fremdes-projekt-b.example.de`-Block übernommen.
-4. `docker exec fremdes-projekt-a-caddy-1 caddy validate --config /etc/caddy/Caddyfile`
-   vor jedem Reload, danach `docker exec fremdes-projekt-a-caddy-1 caddy reload --config
-   /etc/caddy/Caddyfile`.
-5. Verifiziert per `curl -I https://notebook.example.de/` (Frontend) und
-   `curl -I https://notebook.example.de/api/health` (API) sowie
-   Regressionscheck der Nachbarprojekte (`fremdes-projekt-a.example.de`,
-   `fremdes-projekt-b.example.de` weiterhin erreichbar).
+Two problems the overlay works around:
 
-**Wichtiger Next.js-Fallstrick bei mehreren Netzwerken:** Der
-Next.js-Standalone-Server (`apps/frontend/Dockerfile` → `server.js`) bindet
-standardmäßig an die per Docker-DNS aufgelöste `HOSTNAME`-IP statt an
-`0.0.0.0`. Sobald `frontend` (wie hier) in zwei Docker-Netzwerken hängt, kann
-diese Auflösung auf die falsche Netzwerk-IP zeigen und der Server ist über
-das andere Netzwerk nicht mehr erreichbar. `docker-compose.shared-caddy.yml`
-setzt deshalb explizit `HOSTNAME=0.0.0.0` für `frontend`.
+- **Alias collisions.** Once `api` is in the shared network, short names such
+  as `postgres` or `minio` can also belong to other projects' containers there,
+  and Docker's DNS may resolve them to the wrong one (observed: `api` connected
+  to another project's Postgres and failed to authenticate). The overlay
+  therefore points `api` at the unique `container_name` values
+  (`notebook-postgres`, `notebook-redis`, `notebook-qdrant`, `notebook-minio`).
+- **Next.js bind address.** The standalone server binds to the address its
+  `HOSTNAME` resolves to. With two networks that can be the wrong one, so the
+  overlay sets `HOSTNAME=0.0.0.0`.
 
-**Wichtiger DNS-Alias-Fallstrick bei mehreren Netzwerken (Hostnamen-Kollision):**
-Sobald `api` zusätzlich im geteilten Netzwerk hängt, tauchen dort ggf. bereits
-generische Service-Kurznamen anderer Projekte auf - beobachtet auf diesem
-Host: `postgres` (bereits von `fremdes-projekt-a-postgres-1` belegt) und
-`minio` (bereits von `fremdes-projekt-b-minio` belegt). Wenn `api` selbst
-per Compose-Service-Namen
-(`POSTGRES_HOST=postgres`, `MINIO_ENDPOINT=http://minio:9000`, analog für
-`REDIS_URL`/`QDRANT_URL`) auf seine eigenen Abhängigkeiten zugreift, kann
-Dockers eingebautes DNS im Container den Kurznamen auf den **fremden**,
-gleichnamigen Container im geteilten Netzwerk statt auf den eigenen
-Notebook-Container auflösen (beobachtetes Symptom: `api` verband sich beim
-Neustart nach dem Netzwerk-Join gegen `fremdes-projekt-a-postgres-1` statt
-`notebook-postgres` und scheiterte an dessen Zugangsdaten). Fix:
-`docker-compose.shared-caddy.yml` überschreibt `POSTGRES_HOST`, `REDIS_URL`,
-`QDRANT_URL` und `MINIO_ENDPOINT` für `api` auf die global eindeutigen
-`container_name`-Werte (`notebook-postgres`, `notebook-redis`,
-`notebook-qdrant`, `notebook-minio`) statt der generischen Service-Namen -
-Container-Namen sind hostweit eindeutig und daher kollisionsfrei, unabhängig
-davon, wie viele weitere Projekte mit gleichnamigen Services auf demselben
-Host laufen oder wie oft `api` neu gestartet/neu ins Netzwerk gehängt wird.
+## Frontend build variable
 
-Der eigene `caddy`-Service in `docker-compose.yml` bleibt für Hosts erhalten,
-auf denen Port 80/443 frei sind (Standardfall, z. B. ein dedizierter Server
-nur für NotebookLMC) - dort einfach `docker compose up -d` ohne die
-Zusatz-Datei verwenden.
-
-## Frontend-Build-Variable
-
-`NEXT_PUBLIC_API_URL` wird von Next.js **zur Build-Zeit** in das JS-Bundle
-eingebettet, nicht zur Laufzeit gelesen. Deshalb wird sie in
-`docker-compose.yml` als `build.args` an den `frontend`-Service übergeben,
-nicht als `environment:`. Nach einer Änderung von `NEXT_PUBLIC_API_URL` in
-`.env` muss das Frontend-Image neu gebaut werden (ein einfacher `restart`
-reicht **nicht**, da die Variable bereits fest im JS-Bundle steht):
+`NEXT_PUBLIC_API_URL` is inlined into the JavaScript bundle at build time, so
+it is a build argument in `docker-compose.yml`, not an environment variable.
+After changing it, rebuild:
 
 ```bash
 docker compose build frontend
 docker compose up -d frontend
 ```
 
-**Normalfall: leer lassen (same-origin über Caddy).** `NEXT_PUBLIC_API_URL`
-sollte im Regelfall leer bleiben (`NEXT_PUBLIC_API_URL=` bzw. Variable in
-`.env` weglassen). `apps/frontend/lib/api-client.ts` fällt dann auf einen
-leeren String zurück, wodurch alle `fetch()`-Aufrufe zu relativen Pfaden wie
-`/api/notebooks` statt absoluten URLs wie `http://localhost:8000/api/notebooks`
-werden. Der Browser schickt diese Requests an denselben Origin, von dem die
-Seite geladen wurde (egal ob `http://localhost`, eine echte Domain oder eine
-Server-IP) - Caddy leitet `/api/*` serverseitig an `api:8000` weiter (siehe
-`infra/caddy/Caddyfile`), der Browser selbst muss `api:8000` nie direkt
-kennen oder erreichen können. Das behebt insbesondere das Problem, dass ein
-Browser auf einem *anderen* Gerät als dem Server sonst versucht,
-`localhost:8000` auf dem eigenen Endgerät zu erreichen ("Load failed"), statt
-den Server zu kontaktieren.
+Leave it empty (default). The frontend then calls relative paths such as
+`/api/notebooks`, which reach the API through Caddy or the route handler on
+the same origin. That also works from other devices, where an absolute
+`http://localhost:8000` would point at the device itself.
 
-**Sonderfall: absolute URL setzen.** Nur wenn die API bewusst auf einer
-komplett getrennten Domain/Subdomain betrieben wird (z. B. Frontend auf
-`notebook.example.de`, API auf `notebook-api.example.de`, siehe
-Separate-Subdomain-Variante in `infra/caddy/Caddyfile`), muss
-`NEXT_PUBLIC_API_URL` auf die volle API-URL gesetzt werden. In diesem Fall
-greift beim Browser-Zugriff echtes Cross-Origin-CORS - stelle sicher, dass
-`APP_URL` (siehe unten) auf die Frontend-Domain zeigt, damit
-`allow_origins` in `apps/api/app/core/config.py`/`app/main.py` diese Anfragen
-akzeptiert.
+Set an absolute URL only if the API runs on a separate domain. The browser
+then makes cross-origin requests, and `APP_URL` must be the frontend origin.
 
-## `APP_URL` bei Domain-Wechseln anpassen
+## `APP_URL`
 
-`APP_URL` (`.env`) wird von der API ausschließlich für CORS verwendet
-(`allow_origins=[settings.app_url]` in `apps/api/app/main.py`) - relevant für
-Szenarien mit direktem, nicht über Caddy same-origin geroutetem Zugriff auf
-die API, z. B.:
+`APP_URL` is only used for CORS (`allow_origins` in `apps/api/app/main.py`). It
+matters for cross-origin access to the API: a `npm run dev` frontend on port
+3000 talking directly to the API on 8000, or a separate API domain. In the
+same-origin setup (empty `NEXT_PUBLIC_API_URL`) there is no CORS and the
+value is irrelevant. When the public domain changes, update it.
 
-- lokale Entwicklung ohne Docker/Caddy, bei der ein separat gestarteter
-  Frontend-Dev-Server (z. B. `npm run dev` auf Port 3000) direkt gegen die
-  API auf Port 8000 spricht (Cross-Origin);
-- der oben beschriebene Sonderfall einer getrennten API-Subdomain.
+## Migrations
 
-Beim same-origin-Betrieb über Caddy (Normalfall, `NEXT_PUBLIC_API_URL` leer)
-sieht der Browser Frontend und API dagegen als **einen** Origin - dafür ist
-kein CORS nötig, `APP_URL` spielt für diesen Pfad keine Rolle.
-
-**Wichtig:** Wird die öffentliche Domain/IP des Servers geändert (z. B. Umzug
-von `localhost`/einer Test-IP auf eine echte Domain), muss `APP_URL` in `.env`
-auf diese neue Domain/IP aktualisiert werden, sonst schlagen die oben
-genannten direkten Cross-Origin-Zugriffe mit einem CORS-Fehler fehl. Für den
-Caddy-same-origin-Pfad (der Regelfall für Endnutzer im Browser) ist das nicht
-erforderlich, da dort kein CORS greift.
-
-## Datenbank-Migrationen
-
-Migrationen werden ausschließlich vom `api`-Service verwaltet (Alembic).
-Der `worker` liest/schreibt dieselben Tabellen, führt aber nie DDL aus.
+Only the `api` service runs Alembic; the worker reads and writes the same
+tables but never issues DDL.
 
 ```bash
-make migrate                          # Migrationen anwenden
-make migrate-autogenerate msg="..."   # neue Migration aus Modell-Änderungen generieren
+make migrate                          # upgrade head
+make migrate-autogenerate msg="..."   # new revision from model changes
 ```
 
 ## Backups
 
-Platzhalter-Skripte unter `infra/backup/`:
+Scripts in `infra/backup/`, each writing to `infra/backup/output/`
+(git-ignored):
 
-- `backup_postgres.sh` - `pg_dump` des `notebook`-Schemas
-- `backup_minio.sh` - `mc mirror` des `notebook-files`-Buckets
-- `backup_qdrant.sh` - Qdrant-Snapshot der `notebook_chunks`-Collection
+- `backup_postgres.sh`: `pg_dump` in custom format, gzip-compressed
+- `backup_minio.sh`: `mc mirror` of the `notebook-files` bucket (throwaway
+  `minio/mc` container)
+- `backup_qdrant.sh`: snapshot of the `notebook_chunks` collection via the
+  Qdrant HTTP API
 
-Alle drei sind eigenständig ausführbar und schreiben nach
-`infra/backup/output/` (siehe `.gitignore`).
+Scheduling, retention and off-host copies are not part of the repository. Keep
+`.env` somewhere safe as well.
 
-## Skalierung / Betrieb
+## Operations
 
-- **Worker-Concurrency:** mehrere `worker`-Container/Prozesse können
-  parallel gestartet werden (RQ verteilt Jobs automatisch über alle
-  Worker, die auf dieselben Queues hören). Für getrennte Concurrency von
-  Embedding- vs. Default-Jobs zwei separate Worker-Deployments mit
-  jeweils nur einer Queue betreiben.
-- **Healthchecks:** `postgres`, `redis`, `qdrant`, `minio` haben
-  Docker-Healthchecks; `api`/`worker` starten erst, wenn diese "healthy" sind.
-- **Stateless API/Worker:** beide Services halten keinen lokalen State -
-  horizontale Skalierung ist ohne Sticky-Sessions möglich, da Sessions in
-  Redis (nicht im API-Prozess) gehalten werden, siehe `docs/security.md`.
+- **Workers.** More worker containers can be started; RQ distributes jobs over
+  all workers listening on the same queues. Today all jobs go to the `default`
+  queue, see [architecture.md](architecture.md).
+- **Health checks.** `postgres`, `redis`, `qdrant` and `minio` have Compose
+  health checks, and `api` and `worker` wait for them. The API has
+  `GET /api/health`.
+- **Statelessness.** API and worker keep no local state, and sessions are in
+  Redis, so the API can run with several workers or replicas without sticky
+  sessions. The Gunicorn worker count is `API_WORKERS` (default 4).
 
 ## Troubleshooting
 
-- **Port 80/443 bereits belegt:** Läuft auf dem Host bereits ein anderer
-  Reverse Proxy (z. B. ein weiterer Caddy/Nginx-Container eines anderen
-  Projekts), schlägt `docker compose up caddy` mit `port is already
-  allocated` fehl. Entweder den anderen Dienst stoppen, oder für lokale
-  Tests die Caddy-Ports in `docker-compose.yml` auf freie Ports mappen
-  (z. B. `"8080:80"`) - `frontend` (3000) und `api` (8000) bleiben davon
-  unberührt und sind währenddessen direkt erreichbar (siehe auch Abschnitt
-  "Direkter Zugriff ohne Caddy" oben für den same-origin-Fall über die
-  Next.js-Rewrites).
-- **Eigener `caddy`-Container hängt dauerhaft im Zustand `Created`:** Typisches
-  Symptom, wenn Port 80/443 durch einen bereits laufenden, unabhängigen
-  Caddy-Container eines anderen Projekts dauerhaft belegt sind (siehe Abschnitt
-  "Deployment mit geteiltem Caddy" oben) - der eigene `caddy`-Service kann in
-  diesem Fall grundsätzlich nie erfolgreich starten. Fix: eigenen Service
-  endgültig stoppen und entfernen (`docker compose stop caddy && docker
-  compose rm -f caddy`) und stattdessen ausschließlich
-  `docker-compose.shared-caddy.yml` für `api`/`frontend` verwenden.
+- **Port 80/443 already in use:** `docker compose up caddy` fails with `port is
+  already allocated`. Stop the other proxy, map Caddy to other ports in
+  `docker-compose.yml` (for example `"8080:80"`), or use the shared-Caddy
+  overlay above. Frontend (3000) and API (8000) stay reachable meanwhile.
+- **`caddy` stuck in `Created`:** same cause; remove it with `docker compose
+  stop caddy && docker compose rm -f caddy` and use the overlay.
+- **Login works but the session is lost:** `SESSION_COOKIE_SECURE` must be
+  `false` on plain HTTP and `true` on HTTPS, see [security.md](security.md).
 
-## Environment-Variablen
+## Settings to check before a real deployment
 
-Vollständige Liste inkl. Kommentaren: [`.env.example`](../.env.example).
-Kritisch vor dem ersten produktiven Start zu setzen:
+Full list with comments: [`.env.example`](../.env.example).
 
 - `LANGDOCK_API_KEY`, `LANGDOCK_PRIMARY_MODEL`, `LANGDOCK_FAST_MODEL`
-- `POSTGRES_PASSWORD`, `MINIO_ROOT_PASSWORD` (Default-Werte nur für lokale Entwicklung!)
-- `APP_URL` (echte Domain/IP statt `localhost`, siehe Abschnitt oben - nur für
-  direkten, nicht-Caddy-proxied Zugriff auf die API relevant)
-- `NEXT_PUBLIC_API_URL` (im Normalfall **leer lassen**, siehe Abschnitt
-  "Frontend-Build-Variable" oben - nur im Sonderfall einer getrennten
-  API-Domain/Subdomain setzen, dann Image neu bauen)
+- `POSTGRES_PASSWORD`, `MINIO_ROOT_PASSWORD`, `DEV_DEMO_USER_PASSWORD`
+  (defaults are for local use)
+- `SESSION_COOKIE_SECURE=true` behind HTTPS
+- `APP_URL` only for cross-origin setups
+- `NEXT_PUBLIC_API_URL`: normally empty; a rebuild is needed after changing it
+- `BIND_ADDRESS`: keep `127.0.0.1` on a public host

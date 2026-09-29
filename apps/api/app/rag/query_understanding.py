@@ -1,9 +1,10 @@
-"""Optional Haiku pre-processing steps (architecture doc §16.1/§16.2).
+"""Optional Haiku pre-processing steps.
 
 Both are prepared, working functions but only invoked from chat/service.py
 when the corresponding ENABLE_* flag is set - the MVP core flow
 (embed -> retrieve -> Sonnet -> validate) works fine without them.
 """
+
 from app.core.logging import get_logger
 from app.langdock.client import LangdockClient
 from app.langdock.prompts_loader import load_prompt

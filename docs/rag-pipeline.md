@@ -1,6 +1,4 @@
-# RAG-Pipeline
-
-## Überblick
+# RAG pipeline
 
 ```mermaid
 sequenceDiagram
@@ -10,116 +8,119 @@ sequenceDiagram
     participant Q as Qdrant
     participant PG as Postgres
     U->>API: POST /api/notebooks/{id}/chat
-    API->>PG: User-Message persistieren
+    API->>PG: persist user message
     opt ENABLE_INTENT_DETECTION=true
-        API->>LD: Haiku Intent Detection
+        API->>LD: Haiku intent detection
     end
     opt ENABLE_QUERY_REWRITE=true
-        API->>LD: Haiku Query Rewrite
+        API->>LD: Haiku query rewrite
     end
-    API->>LD: Query Embedding (text-embedding-ada-002)
-    API->>Q: Similarity Search (Filter: notebook_id, optional source_ids)
-    API->>API: Score-Heuristik (Top 10)
-    API->>PG: Chunk-Texte nachladen
-    API->>API: Context Assembly
-    API->>LD: Sonnet Answer Generation (JSON-Schema)
-    API->>API: Citation Validation
-    API->>PG: Assistant-Message + langdock_requests persistieren
-    API->>U: Antwort + Quellenkarten
+    API->>LD: query embedding (text-embedding-ada-002)
+    API->>Q: similarity search (filter: notebook_id, optional source_ids)
+    API->>Q: backfill search for sources missing from the result
+    API->>API: score heuristic (top 10)
+    API->>PG: load chunk texts
+    API->>API: context assembly
+    API->>LD: Sonnet answer (tool call with JSON schema)
+    API->>API: citation validation
+    API->>PG: persist assistant message and langdock_requests row
+    API->>U: answer and citations
 ```
 
-Implementiert in `apps/api/app/chat/service.py`, orchestriert die Module in
-`apps/api/app/rag/`.
+Implemented in `apps/api/app/chat/service.py`, which orchestrates the modules
+in `apps/api/app/rag/`.
 
-## 1. Intent Detection & Query Rewrite (optional)
+## 1. Intent detection and query rewrite (optional)
 
-`apps/api/app/rag/query_understanding.py`. Beide Schritte nutzen Claude
-Haiku über den `LangdockClient` und die Prompts
-`packages/prompts/haiku_intent_detection.md` bzw.
-`packages/prompts/haiku_query_rewrite.md`. Sie sind per
-`ENABLE_INTENT_DETECTION` / `ENABLE_QUERY_REWRITE` (Default: `false`)
-zuschaltbar - der Kernflow (Embedding → Retrieval → Sonnet → Citation
-Validation) funktioniert unabhängig davon vollständig.
+`rag/query_understanding.py`. Both steps call Claude Haiku through
+`LangdockClient` with the prompts `packages/prompts/haiku_intent_detection.md`
+and `haiku_query_rewrite.md`. They are switched on with
+`ENABLE_INTENT_DETECTION` and `ENABLE_QUERY_REWRITE` (both default to
+`false`). If a step fails it is skipped: intent becomes `unknown`, the rewrite
+falls back to the original question. The rest of the flow does not depend on
+either.
 
-## 2. Query Embedding
+When intent detection is on and the intent is `summary` or `briefing`, the
+per-source cap of the score heuristic is lowered to one chunk, so that every
+source gets a slot.
 
-`LangdockClient.embed()` (`apps/api/app/langdock/client.py`) ruft die
-OpenAI-kompatible Langdock-Embedding-API auf (`text-embedding-ada-002`,
-1536 Dimensionen). Bei jeder (ggf. umgeschriebenen) Suchvariante wird ein
-Embedding erzeugt.
+## 2. Query embedding
 
-## 3. Similarity Search
+`LangdockClient.embed()` calls the OpenAI-compatible Langdock endpoint
+(`text-embedding-ada-002`, 1536 dimensions). All search variants are embedded
+in one batched call.
 
-`apps/api/app/rag/retrieval.py::search_notebook()` sucht in der
-Qdrant-Collection `notebook_chunks`, gefiltert auf `notebook_id` (und
-optional `source_ids`, falls der Client die Suche auf bestimmte Quellen
-eingrenzen will). Liefert bis zu 30 Treffer pro Suchvariante.
+## 3. Similarity search
 
-## 4. Score-Heuristik
+`rag/retrieval.py::search_notebook()` searches the collection
+`notebook_chunks`, always filtered on `notebook_id` and optionally on the
+`source_ids` the client sent. It returns up to 30 hits per search variant.
+The synchronous Qdrant client runs in `asyncio.to_thread` so it does not block
+the event loop.
 
-`apply_score_heuristic()` dedupliziert über mehrere Suchvarianten (höchster
-Score gewinnt pro Chunk) und behält die Top 10 Chunks. Zusätzlich greift eine
-per-Source-Diversity-Garantie: statt eines reinen globalen Top-k (das bei
-Notebooks mit einer dominanten Quelle alle anderen Quellen aus dem Kontext
-verdrängen kann) werden die Kandidaten source-weise sortiert und per Round-Robin
-vergeben, sodass jede Quelle ihren besten Chunk(s) zuerst einbringt; danach
-füllen die global besten verbleibenden Chunks die restlichen Slots. Eine
-separate `backfill_missing_sources()`-Funktion stellt sicher, dass auch Quellen
-mit niedrigem Qdrant-Score mindestens einen Kandidaten liefern können (je eine
-kleine Qdrant-Suche pro noch nicht erfasster Quelle). Haiku-Reranking
-(`RERANKER_ENABLED`) ist als nächster Erweiterungspunkt vorgesehen, aber
-noch nicht aktiv genutzt.
+## 4. Score heuristic and backfill
 
-## 5. Context Assembly
+Hits from several search variants are merged per chunk, the highest score
+wins. `backfill_missing_sources()` then covers a case that plain top-k search
+misses: when one large source fills the whole top 30, the other sources never
+appear as candidates. For every source of the notebook that has no candidate,
+it runs one small extra Qdrant search (two hits). No Langdock call is involved.
 
-`apps/api/app/rag/context_assembly.py`. Qdrant speichert nur Metadaten im
-Payload, nicht den vollen Chunk-Text - dieser wird aus Postgres (Source of
-Truth) nachgeladen und zusammen mit `source_id`, `chunk_id`,
-`document_name`, Seitenzahl und Heading zu einem strukturierten
-Kontext-Block für Sonnet zusammengesetzt.
+`apply_score_heuristic()` selects the final 10 chunks. Instead of a plain
+global top 10 it hands out slots round-robin over the sources (at most
+`CONTEXT_MAX_CHUNKS_PER_SOURCE` per source, default 4), so that each source
+contributes its best chunk first. Remaining slots go to the best remaining
+chunks by score. Reranking with Haiku is not implemented.
 
-## 6. Answer Generation
+## 5. Context assembly
 
-System-Prompt: `packages/prompts/system_final_answer.md` (wortgetreu:
-ausschließlich quellenbasiert antworten, keine erfundenen Fakten/Zitate,
-Unklarheiten benennen). Output-Schema: `packages/prompts/output_schema.json`
-(`answer`, `citations[]`, `confidence`, `missing_information[]`,
-`follow_up_questions[]`). `LangdockClient.tool_output()` ruft Claude Sonnet
-über native Anthropic Tool-Use auf (statt freiem "return JSON"-Instruction) –
-Anthropic validiert das Tool-Input-Argument serverseitig gegen das Schema,
-sodass die Antwort als Python-Dict ohne JSON-Parsing-Risiko zurückkommt. Intern
-delegiert `tool_output()` an `generate_structured()`, das auch für alle
-Studio-Artefakttypen genutzt wird.
+`rag/context_assembly.py`. Qdrant stores only metadata, so the chunk texts are
+loaded from Postgres and joined into one block per chunk with `source_id`,
+`chunk_id`, document name, page and heading. Points without a matching
+Postgres row are skipped.
 
-## 7. Citation Validation
+## 6. Answer generation
 
-`apps/api/app/rag/citation_validation.py::validate_citations()`. Da dem
-Modell nicht blind vertraut wird, prüft dieser Schritt für jede vom Modell
-genannte Zitation:
+The system prompt is `packages/prompts/system_final_answer.md`: answer only
+from the given sources, do not invent facts or citations, say so when the
+sources are insufficient. The prompts and UI strings of the application are
+in German.
 
-- Existiert `chunk_id` überhaupt (gültige UUID, vorhanden in `chunks`)?
-- Gehört der Chunk zum angefragten `notebook_id`?
-- Gehört die zugehörige `source_id` ebenfalls zu diesem Notebook?
-- Ist die genannte Seitenzahl plausibel (≤ `source.page_count`, sonst wird
-  sie verworfen und durch die tatsächliche Chunk-Seite ersetzt)?
+The model is called with a forced tool call whose input schema is
+`packages/prompts/final_answer_tool_schema.json` (`answer`, `citations[]`,
+`confidence`, `missing_information[]`, `follow_up_questions[]`).
+`LangdockClient.tool_output()` returns the tool input as a Python dict, so no
+free-text JSON parsing is needed. The same mechanism (`generate_structured`)
+generates the studio artifacts.
 
-Nicht validierbare Zitate werden **verworfen statt die ganze Antwort zu
-blockieren** (MVP-Robustheitsentscheidung). Bleiben nach der Validierung
-keine Zitate übrig, wird `confidence` zwangsweise auf `low` herabgestuft
-(`downgrade_confidence_if_unsupported()`), damit dem Nutzer nie eine
-unbelegte Aussage als "high confidence" präsentiert wird.
+The token budget is `CHAT_ANSWER_MAX_TOKENS` (default 4096). If the answer is
+cut off (`stop_reason=max_tokens`), the call is repeated once with twice the
+budget.
 
-## 8. Antwort + Quellenkarten
+## 7. Citation validation
 
-Die validierte `ChatResponse` (inkl. `citations[]`) wird als
-Assistant-Message in Postgres persistiert und ans Frontend zurückgegeben.
-`apps/frontend/components/chat/CitationCard.tsx` rendert je Zitat Dokumentname,
-Seitenzahl und das wörtliche Zitat als eigene Karte unter der Antwort.
+`rag/citation_validation.py::validate_citations()`. The model output is not
+trusted; for each citation it checks:
 
-## Fehlerbehandlung
+- `chunk_id` is a valid UUID and exists in `chunks` for this notebook.
+- The chunk's source exists and belongs to this notebook.
+- A cited page number beyond the source's `page_count` is dropped and replaced
+  by the chunk's own page.
 
-Jeder externe Aufruf (Embedding, Sonnet) ist einzeln abgesichert: schlägt
-der Embedding-/Retrieval-Schritt fehl (z. B. ungültiger Langdock-Key), gibt
-der Chat-Endpoint eine verständliche, niedrig-konfidente Antwort statt eines
-500ers zurück; ebenso beim Sonnet-Aufruf. Der Fehler landet zusätzlich im
-Server-Log.
+Citations that fail are dropped, the answer is still returned. If no citation
+survives, `downgrade_confidence_if_unsupported()` forces `confidence` to
+`low`, so an unsupported answer is never shown as high confidence.
+
+## 8. Response
+
+The validated `ChatResponse` is stored as an assistant message and returned.
+The frontend (`components/chat/CitationCard.tsx`) renders each citation with
+document name, page and quote below the answer.
+
+## Error handling
+
+Each external step is guarded on its own. If embedding or retrieval fails, or
+if the answer call fails (also after the truncation retry), the endpoint
+returns a low-confidence response with an explanatory message instead of a
+500, and the error is logged. If retrieval finds no chunks, the response says
+that nothing relevant was found.

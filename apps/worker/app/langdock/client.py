@@ -1,11 +1,11 @@
 """Langdock gateway client - worker side.
 
-Mirrors apps/api/app/langdock/client.py (see that file's docstring and the
-implementation plan's "Empfehlung Code-Sharing" note on why this is
+Mirrors apps/api/app/langdock/client.py (see docs/architecture.md on why this is
 duplicated rather than imported from a shared package). The worker mainly
 needs `embed()`; `generate_haiku`/`generate_sonnet` are kept available for
 future worker-side jobs that need LLM calls.
 """
+
 import base64
 import json
 import time
@@ -87,16 +87,24 @@ class LangdockClient:
         self._settings = settings
 
         if not settings.langdock_api_key:
-            logger.warning("LANGDOCK_API_KEY is empty - Langdock calls will fail until it is set in .env")
+            logger.warning(
+                "LANGDOCK_API_KEY is empty - Langdock calls will fail until it is set in .env"
+            )
 
         self._anthropic = Anthropic(
             api_key=settings.langdock_api_key or "unset",
             base_url=_anthropic_sdk_base_url(settings.langdock_anthropic_base_url),
         )
-        self._openai = OpenAI(api_key=settings.langdock_api_key or "unset", base_url=settings.embedding_base_url)
+        self._openai = OpenAI(
+            api_key=settings.langdock_api_key or "unset", base_url=settings.embedding_base_url
+        )
 
     def _model_for(self, tier: ModelTier) -> str:
-        model = self._settings.langdock_primary_model if tier == "sonnet" else self._settings.langdock_fast_model
+        model = (
+            self._settings.langdock_primary_model
+            if tier == "sonnet"
+            else self._settings.langdock_fast_model
+        )
         if not model:
             raise RuntimeError(
                 f"No Langdock model id configured for tier={tier!r}. Set LANGDOCK_PRIMARY_MODEL / "
@@ -114,7 +122,12 @@ class LangdockClient:
         )
 
     def _generate(
-        self, tier: ModelTier, system: str, user_message: str, max_tokens: int, enable_thinking: bool = False
+        self,
+        tier: ModelTier,
+        system: str,
+        user_message: str,
+        max_tokens: int,
+        enable_thinking: bool = False,
     ) -> LangdockTextResponse:
         model = self._model_for(tier)
         started = time.monotonic()
@@ -127,7 +140,10 @@ class LangdockClient:
         }
         if enable_thinking:
             create_kwargs["max_tokens"] = max_tokens + EXTENDED_THINKING_BUDGET_TOKENS
-            create_kwargs["thinking"] = {"type": "enabled", "budget_tokens": EXTENDED_THINKING_BUDGET_TOKENS}
+            create_kwargs["thinking"] = {
+                "type": "enabled",
+                "budget_tokens": EXTENDED_THINKING_BUDGET_TOKENS,
+            }
 
         @self._retry_decorator()
         def _call():
@@ -140,7 +156,9 @@ class LangdockClient:
 
         response = _call()
         latency_ms = int((time.monotonic() - started) * 1000)
-        text = "".join(block.text for block in response.content if getattr(block, "type", None) == "text")
+        text = "".join(
+            block.text for block in response.content if getattr(block, "type", None) == "text"
+        )
         usage = LangdockUsage(
             model=model,
             input_tokens=getattr(response.usage, "input_tokens", None),
@@ -151,15 +169,25 @@ class LangdockClient:
         )
         return LangdockTextResponse(text=text, usage=usage)
 
-    def generate_haiku(self, system: str, user_message: str, max_tokens: int = 512) -> LangdockTextResponse:
+    def generate_haiku(
+        self, system: str, user_message: str, max_tokens: int = 512
+    ) -> LangdockTextResponse:
         return self._generate("haiku", system, user_message, max_tokens)
 
-    def generate_sonnet(self, system: str, user_message: str, max_tokens: int = 2048) -> LangdockTextResponse:
+    def generate_sonnet(
+        self, system: str, user_message: str, max_tokens: int = 2048
+    ) -> LangdockTextResponse:
         return self._generate(
-            "sonnet", system, user_message, max_tokens, enable_thinking=self._settings.langdock_enable_extended_thinking
+            "sonnet",
+            system,
+            user_message,
+            max_tokens,
+            enable_thinking=self._settings.langdock_enable_extended_thinking,
         )
 
-    def structured_output(self, tier: ModelTier, system: str, user_message: str, max_tokens: int = 2048) -> tuple[dict[str, Any], LangdockUsage]:
+    def structured_output(
+        self, tier: ModelTier, system: str, user_message: str, max_tokens: int = 2048
+    ) -> tuple[dict[str, Any], LangdockUsage]:
         response = self._generate(tier, system, user_message, max_tokens)
         raw = response.text.strip()
         if raw.startswith("```"):
@@ -169,7 +197,9 @@ class LangdockClient:
         try:
             return json.loads(raw), response.usage
         except json.JSONDecodeError as exc:
-            raise ValueError(f"Langdock model did not return valid JSON: {exc}\nRaw: {raw[:500]}") from exc
+            raise ValueError(
+                f"Langdock model did not return valid JSON: {exc}\nRaw: {raw[:500]}"
+            ) from exc
 
     def extract_text_from_image(
         self, image_bytes: bytes, media_type: str = "image/jpeg", max_tokens: int = 4096
@@ -188,7 +218,9 @@ class LangdockClient:
             response = self._vision_call(retry_max_tokens, image_bytes, media_type)
         return response
 
-    def _vision_call(self, max_tokens: int, image_bytes: bytes, media_type: str) -> LangdockTextResponse:
+    def _vision_call(
+        self, max_tokens: int, image_bytes: bytes, media_type: str
+    ) -> LangdockTextResponse:
         model = self._model_for("sonnet")
         started = time.monotonic()
         image_b64 = base64.b64encode(image_bytes).decode("ascii")
@@ -203,7 +235,11 @@ class LangdockClient:
                     "content": [
                         {
                             "type": "image",
-                            "source": {"type": "base64", "media_type": media_type, "data": image_b64},
+                            "source": {
+                                "type": "base64",
+                                "media_type": media_type,
+                                "data": image_b64,
+                            },
                         },
                         {
                             "type": "text",
@@ -229,7 +265,9 @@ class LangdockClient:
 
         response = _call()
         latency_ms = int((time.monotonic() - started) * 1000)
-        text = "".join(block.text for block in response.content if getattr(block, "type", None) == "text")
+        text = "".join(
+            block.text for block in response.content if getattr(block, "type", None) == "text"
+        )
         usage = LangdockUsage(
             model=model,
             input_tokens=getattr(response.usage, "input_tokens", None),
@@ -248,7 +286,9 @@ class LangdockClient:
         def _call():
             try:
                 return self._openai.embeddings.create(
-                    model=settings.embedding_model, input=texts, encoding_format=settings.embedding_encoding_format
+                    model=settings.embedding_model,
+                    input=texts,
+                    encoding_format=settings.embedding_encoding_format,
                 )
             except Exception as exc:
                 if "429" in str(exc) or exc.__class__.__name__ == "RateLimitError":

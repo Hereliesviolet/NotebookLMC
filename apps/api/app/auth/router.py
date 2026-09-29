@@ -36,8 +36,12 @@ def _set_session_cookies(response: Response, session_id: str, csrf_token: str) -
 
 def _clear_session_cookies(response: Response) -> None:
     settings = get_settings()
-    response.delete_cookie(SESSION_COOKIE_NAME, path="/", domain=settings.session_cookie_domain or None)
-    response.delete_cookie(CSRF_COOKIE_NAME, path="/", domain=settings.session_cookie_domain or None)
+    response.delete_cookie(
+        SESSION_COOKIE_NAME, path="/", domain=settings.session_cookie_domain or None
+    )
+    response.delete_cookie(
+        CSRF_COOKIE_NAME, path="/", domain=settings.session_cookie_domain or None
+    )
 
 
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
@@ -99,7 +103,9 @@ async def login(
     result = await db.execute(select(models.User).where(models.User.email == payload.email))
     user = result.scalar_one_or_none()
     if user is None or not verify_password(payload.password, user.password_hash):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password"
+        )
 
     session_id = create_session(redis, str(user.id))
     _set_session_cookies(response, session_id, generate_csrf_token())

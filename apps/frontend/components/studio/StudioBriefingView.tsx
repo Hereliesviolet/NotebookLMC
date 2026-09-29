@@ -11,7 +11,12 @@ const SECTIONS: Array<{
 }> = [
   { key: "key_points", title: "Kernpunkte", icon: ListChecks, accent: "text-primary" },
   { key: "risks", title: "Risiken", icon: AlertTriangle, accent: "text-red-600" },
-  { key: "recommended_actions", title: "Empfohlene Maßnahmen", icon: CheckCircle2, accent: "text-emerald-600" },
+  {
+    key: "recommended_actions",
+    title: "Empfohlene Maßnahmen",
+    icon: CheckCircle2,
+    accent: "text-emerald-600",
+  },
   { key: "open_questions", title: "Offene Fragen", icon: HelpCircle, accent: "text-amber-600" },
 ];
 

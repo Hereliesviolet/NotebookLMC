@@ -9,9 +9,15 @@ export function StudioInfographicView({ content }: { content: StudioInfographicC
       </div>
 
       {content.stats.length > 0 && (
-        <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${content.stats.length}, minmax(0, 1fr))` }}>
+        <div
+          className="grid gap-3"
+          style={{ gridTemplateColumns: `repeat(${content.stats.length}, minmax(0, 1fr))` }}
+        >
           {content.stats.map((stat, index) => (
-            <div key={index} className="rounded-md border border-border bg-primary/10 px-3 py-3 text-center">
+            <div
+              key={index}
+              className="rounded-md border border-border bg-primary/10 px-3 py-3 text-center"
+            >
               <div className="text-xl font-bold text-primary">{stat.value}</div>
               <div className="mt-0.5 text-xs text-muted-foreground">{stat.label}</div>
             </div>

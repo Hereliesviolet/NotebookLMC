@@ -1,16 +1,18 @@
-"""studio_artifacts - Studio MVP2 (summary/faq/timeline/briefing, architecture
-doc §19/§26.5). At most one row per (notebook_id, type); "Neu generieren"
+"""studio_artifacts - Studio artifacts (summary/faq/timeline/briefing).
+At most one row per (notebook_id, type); "Neu generieren"
 upserts via the unique constraint instead of accumulating history rows.
 
 Revision ID: 0004_studio_artifacts
 Revises: 0003_langdock_fk_cascade
 Create Date: 2026-07-05
 """
+
 from typing import Sequence, Union
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 revision: str = "0004_studio_artifacts"
 down_revision: Union[str, None] = "0003_langdock_fk_cascade"

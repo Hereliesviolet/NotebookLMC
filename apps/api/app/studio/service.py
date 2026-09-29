@@ -1,9 +1,10 @@
-"""Studio artifact generation (summary/faq/timeline/briefing, architecture
-doc §19/§26.5): notebook-wide context -> Sonnet tool-use -> upsert into
+"""Studio artifact generation (summary/faq/timeline/briefing/...):
+notebook-wide context -> Sonnet tool-use -> upsert into
 studio_artifacts. Same building blocks as chat/service.py, but over
 notebook-wide context instead of query-based retrieval, and always exactly
 one persisted row per (notebook_id, type).
 """
+
 import json
 
 from sqlalchemy import select
@@ -104,16 +105,22 @@ async def generate_artifact(
     user_message = f"Quellenkontext (alle indizierten Quellen dieses Notebooks):\n{context}"
 
     max_tokens = settings.studio_answer_max_tokens
-    content, usage = await _generate_and_validate(client, artifact_type, system_prompt, user_message, max_tokens, notebook_id)
+    content, usage = await _generate_and_validate(
+        client, artifact_type, system_prompt, user_message, max_tokens, notebook_id
+    )
 
     source_id_list = [str(s.id) for s in sources]
-    return await _upsert_artifact(db, notebook_id, artifact_type, content, source_id_list, usage.model)
+    return await _upsert_artifact(
+        db, notebook_id, artifact_type, content, source_id_list, usage.model
+    )
 
 
 _MAX_GENERATION_ATTEMPTS = 3
 
 
-async def _generate_and_validate(client, artifact_type, system_prompt, user_message, max_tokens, notebook_id):
+async def _generate_and_validate(
+    client, artifact_type, system_prompt, user_message, max_tokens, notebook_id
+):
     """Up to 3 Sonnet calls total: retries on truncation (doubled max_tokens)
     and, independently, on a malformed nested-array field (fresh sample at
     the same max_tokens - the failure is stochastic, not budget-related).
@@ -159,7 +166,9 @@ async def _generate_and_validate(client, artifact_type, system_prompt, user_mess
             )
             continue
         except Exception as exc:
-            raise StudioGenerationError(f"Langdock-Fehler bei der {artifact_type}-Generierung: {exc}") from exc
+            raise StudioGenerationError(
+                f"Langdock-Fehler bei der {artifact_type}-Generierung: {exc}"
+            ) from exc
 
         try:
             return _normalize_content(artifact_type, content), usage
@@ -187,11 +196,17 @@ async def _generate_and_validate(client, artifact_type, system_prompt, user_mess
 
 
 async def _upsert_artifact(
-    db: AsyncSession, notebook_id: str, artifact_type: str, content: dict, source_id_list: list[str], model: str | None
+    db: AsyncSession,
+    notebook_id: str,
+    artifact_type: str,
+    content: dict,
+    source_id_list: list[str],
+    model: str | None,
 ) -> models.StudioArtifact:
     result = await db.execute(
         select(models.StudioArtifact).where(
-            models.StudioArtifact.notebook_id == notebook_id, models.StudioArtifact.type == artifact_type
+            models.StudioArtifact.notebook_id == notebook_id,
+            models.StudioArtifact.type == artifact_type,
         )
     )
     existing = result.scalar_one_or_none()
@@ -216,10 +231,13 @@ async def _upsert_artifact(
     return artifact
 
 
-async def get_artifact(db: AsyncSession, notebook_id: str, artifact_type: str) -> models.StudioArtifact | None:
+async def get_artifact(
+    db: AsyncSession, notebook_id: str, artifact_type: str
+) -> models.StudioArtifact | None:
     result = await db.execute(
         select(models.StudioArtifact).where(
-            models.StudioArtifact.notebook_id == notebook_id, models.StudioArtifact.type == artifact_type
+            models.StudioArtifact.notebook_id == notebook_id,
+            models.StudioArtifact.type == artifact_type,
         )
     )
     return result.scalar_one_or_none()
