@@ -2,6 +2,7 @@
 
 Run via `make seed` (executes inside the api container).
 """
+
 import asyncio
 
 from sqlalchemy import select
@@ -15,7 +16,9 @@ from app.db.session import AsyncSessionLocal
 async def main() -> None:
     settings = get_settings()
     async with AsyncSessionLocal() as db:
-        result = await db.execute(select(models.User).where(models.User.email == settings.dev_demo_user_email))
+        result = await db.execute(
+            select(models.User).where(models.User.email == settings.dev_demo_user_email)
+        )
         user = result.scalar_one_or_none()
         if user is None:
             user = models.User(
@@ -31,7 +34,9 @@ async def main() -> None:
         else:
             print(f"Demo user already exists: {user.email} ({user.id})")
 
-        result = await db.execute(select(models.Notebook).where(models.Notebook.owner_id == user.id))
+        result = await db.execute(
+            select(models.Notebook).where(models.Notebook.owner_id == user.id)
+        )
         notebook = result.scalars().first()
         if notebook is None:
             notebook = models.Notebook(

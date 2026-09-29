@@ -4,6 +4,7 @@ Kept separate from service.py so the supported-type list is easy to find
 and extend (PowerPoint/Audio/Video/OCR are explicitly out of scope for the
 MVP, per §14.2).
 """
+
 import mimetypes
 
 SUPPORTED_MIME_TYPES: dict[str, str] = {

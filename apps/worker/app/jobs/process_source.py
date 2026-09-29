@@ -7,6 +7,7 @@ RQ calls this function by its dotted path (see apps/api/app/jobs/queue.py).
 Each step below is implemented in its own module; this function only owns
 orchestration, status transitions and error handling.
 """
+
 import uuid
 
 from sqlalchemy.orm import Session

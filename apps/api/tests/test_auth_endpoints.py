@@ -9,6 +9,7 @@ Each test uses a fresh, randomized email so the suite is safe to run
 repeatedly against a persistent dev database without unique-constraint
 collisions from previous runs.
 """
+
 import uuid
 
 import pytest
@@ -44,7 +45,8 @@ async def client():
 async def test_register_returns_user_without_password(client: AsyncClient):
     email = _unique_email()
     response = await client.post(
-        "/api/auth/register", json={"email": email, "password": VALID_PASSWORD, "name": "Pytest User"}
+        "/api/auth/register",
+        json={"email": email, "password": VALID_PASSWORD, "name": "Pytest User"},
     )
     assert response.status_code == 201
     body = response.json()
@@ -65,16 +67,21 @@ async def test_register_duplicate_email_is_rejected(client: AsyncClient):
 
 async def test_register_rejects_too_short_password(client: AsyncClient):
     response = await client.post(
-        "/api/auth/register", json={"email": _unique_email(), "password": "short", "name": "Pytest User"}
+        "/api/auth/register",
+        json={"email": _unique_email(), "password": "short", "name": "Pytest User"},
     )
     assert response.status_code == 422
 
 
 async def test_login_with_wrong_password_returns_generic_401(client: AsyncClient):
     email = _unique_email()
-    await client.post("/api/auth/register", json={"email": email, "password": VALID_PASSWORD, "name": "X"})
+    await client.post(
+        "/api/auth/register", json={"email": email, "password": VALID_PASSWORD, "name": "X"}
+    )
 
-    response = await client.post("/api/auth/login", json={"email": email, "password": "wrong-password"})
+    response = await client.post(
+        "/api/auth/login", json={"email": email, "password": "wrong-password"}
+    )
     assert response.status_code == 401
 
 
@@ -87,9 +94,13 @@ async def test_login_with_unknown_email_returns_generic_401(client: AsyncClient)
 
 async def test_login_success_sets_session_and_csrf_cookies(client: AsyncClient):
     email = _unique_email()
-    await client.post("/api/auth/register", json={"email": email, "password": VALID_PASSWORD, "name": "X"})
+    await client.post(
+        "/api/auth/register", json={"email": email, "password": VALID_PASSWORD, "name": "X"}
+    )
 
-    response = await client.post("/api/auth/login", json={"email": email, "password": VALID_PASSWORD})
+    response = await client.post(
+        "/api/auth/login", json={"email": email, "password": VALID_PASSWORD}
+    )
     assert response.status_code == 200
     assert response.json()["email"] == email
     assert client.cookies.get("session_id") is not None
@@ -103,7 +114,9 @@ async def test_me_requires_valid_session(client: AsyncClient):
 
 async def test_me_returns_current_user_after_login(client: AsyncClient):
     email = _unique_email()
-    await client.post("/api/auth/register", json={"email": email, "password": VALID_PASSWORD, "name": "X"})
+    await client.post(
+        "/api/auth/register", json={"email": email, "password": VALID_PASSWORD, "name": "X"}
+    )
     await client.post("/api/auth/login", json={"email": email, "password": VALID_PASSWORD})
 
     response = await client.get("/api/auth/me")
@@ -113,7 +126,9 @@ async def test_me_returns_current_user_after_login(client: AsyncClient):
 
 async def test_mutating_request_without_csrf_header_is_rejected(client: AsyncClient):
     email = _unique_email()
-    await client.post("/api/auth/register", json={"email": email, "password": VALID_PASSWORD, "name": "X"})
+    await client.post(
+        "/api/auth/register", json={"email": email, "password": VALID_PASSWORD, "name": "X"}
+    )
     await client.post("/api/auth/login", json={"email": email, "password": VALID_PASSWORD})
 
     response = await client.post("/api/notebooks", json={"title": "No CSRF header"})
@@ -122,7 +137,9 @@ async def test_mutating_request_without_csrf_header_is_rejected(client: AsyncCli
 
 async def test_mutating_request_with_correct_csrf_header_succeeds(client: AsyncClient):
     email = _unique_email()
-    await client.post("/api/auth/register", json={"email": email, "password": VALID_PASSWORD, "name": "X"})
+    await client.post(
+        "/api/auth/register", json={"email": email, "password": VALID_PASSWORD, "name": "X"}
+    )
     await client.post("/api/auth/login", json={"email": email, "password": VALID_PASSWORD})
     csrf_token = client.cookies.get("csrf_token")
 
@@ -132,13 +149,17 @@ async def test_mutating_request_with_correct_csrf_header_succeeds(client: AsyncC
     assert response.status_code == 201
 
     notebook_id = response.json()["id"]
-    cleanup = await client.delete(f"/api/notebooks/{notebook_id}", headers={"X-CSRF-Token": csrf_token})
+    cleanup = await client.delete(
+        f"/api/notebooks/{notebook_id}", headers={"X-CSRF-Token": csrf_token}
+    )
     assert cleanup.status_code == 204
 
 
 async def test_logout_invalidates_session(client: AsyncClient):
     email = _unique_email()
-    await client.post("/api/auth/register", json={"email": email, "password": VALID_PASSWORD, "name": "X"})
+    await client.post(
+        "/api/auth/register", json={"email": email, "password": VALID_PASSWORD, "name": "X"}
+    )
     await client.post("/api/auth/login", json={"email": email, "password": VALID_PASSWORD})
 
     # Logout is itself CSRF-protected (POST + session cookie) - a bare POST
@@ -154,18 +175,26 @@ async def test_logout_invalidates_session(client: AsyncClient):
 
 async def test_login_rate_limit_blocks_after_five_attempts_per_minute(client: AsyncClient):
     email = _unique_email()
-    await client.post("/api/auth/register", json={"email": email, "password": VALID_PASSWORD, "name": "X"})
+    await client.post(
+        "/api/auth/register", json={"email": email, "password": VALID_PASSWORD, "name": "X"}
+    )
 
     for _ in range(5):
-        response = await client.post("/api/auth/login", json={"email": email, "password": "wrong-password"})
+        response = await client.post(
+            "/api/auth/login", json={"email": email, "password": "wrong-password"}
+        )
         assert response.status_code == 401
 
-    blocked_response = await client.post("/api/auth/login", json={"email": email, "password": "wrong-password"})
+    blocked_response = await client.post(
+        "/api/auth/login", json={"email": email, "password": "wrong-password"}
+    )
     assert blocked_response.status_code == 429
     assert "Retry-After" in blocked_response.headers
 
     # Even the correct password is blocked once the rate limit is hit.
-    still_blocked = await client.post("/api/auth/login", json={"email": email, "password": VALID_PASSWORD})
+    still_blocked = await client.post(
+        "/api/auth/login", json={"email": email, "password": VALID_PASSWORD}
+    )
     assert still_blocked.status_code == 429
 
 

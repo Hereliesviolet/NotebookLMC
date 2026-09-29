@@ -51,4 +51,6 @@ async def chat(
     """
     notebook = await notebooks_service.get_notebook_or_404(db, notebook_id)
     notebooks_service.assert_can_access(notebook, user.id)
-    return await service.answer_question(db, notebook_id=notebook_id, user_id=user.id, payload=payload)
+    return await service.answer_question(
+        db, notebook_id=notebook_id, user_id=user.id, payload=payload
+    )

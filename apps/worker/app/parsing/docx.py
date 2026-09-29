@@ -1,4 +1,5 @@
 """DOCX parsing via python-docx (architecture doc §14.4 recommendation)."""
+
 import io
 
 from docx import Document

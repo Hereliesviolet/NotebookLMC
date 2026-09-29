@@ -4,6 +4,7 @@ The response schema mirrors the output schema from architecture doc §18.2
 exactly, so the LLM's structured output can be validated and passed through
 with minimal transformation.
 """
+
 from datetime import datetime
 from typing import Literal
 

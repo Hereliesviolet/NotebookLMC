@@ -14,6 +14,7 @@ search_notebook()/backfill_missing_sources()-Aufrufe werden hier stattdessen
 explizit in asyncio.to_thread() ausgelagert, damit sie den Event-Loop
 ebenfalls nicht blockieren.
 """
+
 import asyncio
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,7 +27,12 @@ from app.langdock.prompts_loader import load_final_answer_tool, load_prompt
 from app.rag import query_understanding
 from app.rag.citation_validation import downgrade_confidence_if_unsupported, validate_citations
 from app.rag.context_assembly import build_context_block, fetch_chunk_texts
-from app.rag.retrieval import RetrievedChunk, apply_score_heuristic, backfill_missing_sources, search_notebook
+from app.rag.retrieval import (
+    RetrievedChunk,
+    apply_score_heuristic,
+    backfill_missing_sources,
+    search_notebook,
+)
 from app.schemas.chat import ChatRequest, ChatResponse
 
 logger = get_logger(__name__)
@@ -44,7 +50,11 @@ async def answer_question(
     settings = get_settings()
     client = get_langdock_client()
 
-    db.add(models.Message(notebook_id=notebook_id, user_id=user_id, role="user", content=payload.message))
+    db.add(
+        models.Message(
+            notebook_id=notebook_id, user_id=user_id, role="user", content=payload.message
+        )
+    )
     await db.commit()
 
     intent = None
@@ -66,7 +76,9 @@ async def answer_question(
         for query, vector in zip(search_queries, embedding.vectors):
             if primary_embedding is None:
                 primary_embedding = vector
-            chunks = await asyncio.to_thread(search_notebook, notebook_id, vector, source_ids=payload.source_ids)
+            chunks = await asyncio.to_thread(
+                search_notebook, notebook_id, vector, source_ids=payload.source_ids
+            )
             for chunk in chunks:
                 existing = retrieved_by_id.get(chunk.chunk_id)
                 if existing is None or chunk.score > existing.score:
@@ -85,7 +97,9 @@ async def answer_question(
                 if existing is None or chunk.score > existing.score:
                     retrieved_by_id[chunk.chunk_id] = chunk
     except Exception as exc:
-        logger.exception("Retrieval (query embedding / Qdrant search) failed for notebook=%s", notebook_id)
+        logger.exception(
+            "Retrieval (query embedding / Qdrant search) failed for notebook=%s", notebook_id
+        )
         response = ChatResponse(
             answer="Die Suche in den Quellen ist derzeit nicht verfügbar. Bitte versuche es später erneut.",
             citations=[],
@@ -97,7 +111,9 @@ async def answer_question(
         return response
 
     max_chunks_per_source = 1 if intent in OVERVIEW_INTENTS else None
-    top_chunks = apply_score_heuristic(list(retrieved_by_id.values()), max_chunks_per_source=max_chunks_per_source)
+    top_chunks = apply_score_heuristic(
+        list(retrieved_by_id.values()), max_chunks_per_source=max_chunks_per_source
+    )
 
     if not top_chunks:
         response = ChatResponse(
@@ -120,7 +136,11 @@ async def answer_question(
     answer_max_tokens = settings.chat_answer_max_tokens
     try:
         raw, usage = await client.tool_output(
-            "sonnet", system_prompt, user_message, tool=final_answer_tool, max_tokens=answer_max_tokens
+            "sonnet",
+            system_prompt,
+            user_message,
+            tool=final_answer_tool,
+            max_tokens=answer_max_tokens,
         )
     except ResponseTruncatedError as exc:
         retry_max_tokens = answer_max_tokens * 2
@@ -132,7 +152,11 @@ async def answer_question(
         )
         try:
             raw, usage = await client.tool_output(
-                "sonnet", system_prompt, user_message, tool=final_answer_tool, max_tokens=retry_max_tokens
+                "sonnet",
+                system_prompt,
+                user_message,
+                tool=final_answer_tool,
+                max_tokens=retry_max_tokens,
             )
         except ResponseTruncatedError as retry_exc:
             logger.error(
@@ -149,10 +173,14 @@ async def answer_question(
                     "Die Antwort war zu lang und wurde abgeschnitten - bitte stelle eine "
                     "präzisere oder engere Frage."
                 ),
-                missing_information=[f"Antwort auch nach Retry mit max_tokens={retry_max_tokens} abgeschnitten: {retry_exc}"],
+                missing_information=[
+                    f"Antwort auch nach Retry mit max_tokens={retry_max_tokens} abgeschnitten: {retry_exc}"
+                ],
             )
         except Exception as retry_exc:
-            logger.exception("Sonnet answer generation failed on retry for notebook=%s", notebook_id)
+            logger.exception(
+                "Sonnet answer generation failed on retry for notebook=%s", notebook_id
+            )
             return await _persist_and_return(
                 db,
                 notebook_id,
@@ -171,7 +199,9 @@ async def answer_question(
         )
 
     validated_citations = await validate_citations(db, notebook_id, raw.get("citations") or [])
-    confidence = downgrade_confidence_if_unsupported(raw.get("confidence", "medium"), len(validated_citations))
+    confidence = downgrade_confidence_if_unsupported(
+        raw.get("confidence", "medium"), len(validated_citations)
+    )
 
     response = ChatResponse(
         answer=raw.get("answer", ""),

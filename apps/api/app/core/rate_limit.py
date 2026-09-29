@@ -4,6 +4,7 @@ Deliberately not a general-purpose limiter (no `slowapi`/new dependency) -
 just the counters the auth endpoints need: `INCR` + `EXPIRE` on a
 fixed key per identifier, reset every window.
 """
+
 from redis import Redis
 
 LOGIN_RATE_LIMIT_WINDOW_SECONDS = 60

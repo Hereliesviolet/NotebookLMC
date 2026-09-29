@@ -4,6 +4,7 @@ Tables are emitted as their own chunks in Markdown format (architecture doc
 §14.5), split into row batches so a single huge spreadsheet doesn't become
 one unusably large chunk.
 """
+
 import io
 
 import pandas as pd
@@ -14,7 +15,9 @@ from app.parsing.types import ParsedSection
 _ROWS_PER_CHUNK = 50
 
 
-def _dataframe_to_sections(df: "pd.DataFrame", sheet_name: str | None = None) -> list[ParsedSection]:
+def _dataframe_to_sections(
+    df: "pd.DataFrame", sheet_name: str | None = None
+) -> list[ParsedSection]:
     sections: list[ParsedSection] = []
     total_rows = len(df)
     for start in range(0, total_rows, _ROWS_PER_CHUNK):
@@ -25,7 +28,10 @@ def _dataframe_to_sections(df: "pd.DataFrame", sheet_name: str | None = None) ->
                 text=sanitize_text(batch.to_markdown(index=False)),
                 heading=heading,
                 chunk_type="table",
-                metadata={"row_start": start, "row_end": min(start + _ROWS_PER_CHUNK, total_rows) - 1},
+                metadata={
+                    "row_start": start,
+                    "row_end": min(start + _ROWS_PER_CHUNK, total_rows) - 1,
+                },
             )
         )
     return sections

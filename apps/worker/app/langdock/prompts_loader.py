@@ -1,7 +1,9 @@
 """Loads prompt templates from packages/prompts - mirrored from the api service."""
+
 import os
 from functools import lru_cache
 from pathlib import Path
+
 
 def _candidate_dirs() -> list[Path]:
     candidates = [Path("/app/packages/prompts")]

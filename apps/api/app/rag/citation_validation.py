@@ -6,6 +6,7 @@ claimed page numbers are plausible. Unknown/hallucinated citations are
 dropped rather than blocking the whole answer (MVP robustness
 recommendation from the implementation plan §15).
 """
+
 import uuid
 
 from sqlalchemy import select
@@ -17,7 +18,9 @@ from app.schemas.chat import Citation
 VALID_CONFIDENCE = {"low", "medium", "high"}
 
 
-async def validate_citations(db: AsyncSession, notebook_id: str, raw_citations: list[dict]) -> list[Citation]:
+async def validate_citations(
+    db: AsyncSession, notebook_id: str, raw_citations: list[dict]
+) -> list[Citation]:
     chunk_ids: list[uuid.UUID] = []
     for c in raw_citations:
         chunk_id = c.get("chunk_id")
@@ -31,7 +34,9 @@ async def validate_citations(db: AsyncSession, notebook_id: str, raw_citations: 
     known_chunks: dict[str, models.Chunk] = {}
     if chunk_ids:
         result = await db.execute(
-            select(models.Chunk).where(models.Chunk.id.in_(chunk_ids), models.Chunk.notebook_id == notebook_id)
+            select(models.Chunk).where(
+                models.Chunk.id.in_(chunk_ids), models.Chunk.notebook_id == notebook_id
+            )
         )
         known_chunks = {str(chunk.id): chunk for chunk in result.scalars().all()}
 
@@ -56,7 +61,11 @@ async def validate_citations(db: AsyncSession, notebook_id: str, raw_citations: 
 
         page_start = c.get("page_start")
         page_end = c.get("page_end")
-        if source.page_count is not None and page_start is not None and page_start > source.page_count:
+        if (
+            source.page_count is not None
+            and page_start is not None
+            and page_start > source.page_count
+        ):
             page_start = None
             page_end = None
 

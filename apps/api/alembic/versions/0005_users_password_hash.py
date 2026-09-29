@@ -13,12 +13,14 @@ Revision ID: 0005_users_password_hash
 Revises: 0004_studio_artifacts
 Create Date: 2026-07-06
 """
+
 import secrets
 from typing import Sequence, Union
 
 import sqlalchemy as sa
-from alembic import op
 from argon2 import PasswordHasher
+
+from alembic import op
 
 revision: str = "0005_users_password_hash"
 down_revision: Union[str, None] = "0004_studio_artifacts"

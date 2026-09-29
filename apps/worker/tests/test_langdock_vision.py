@@ -1,4 +1,5 @@
 """Claude Vision OCR call: content shape and max_tokens retry-on-truncation."""
+
 from unittest.mock import MagicMock
 
 from app.langdock.client import LangdockClient
@@ -15,7 +16,9 @@ def _fake_response(text: str, stop_reason: str | None) -> MagicMock:
 def test_extract_text_from_image_sends_image_and_prompt_blocks():
     client = LangdockClient()
     client._anthropic = MagicMock()
-    client._anthropic.messages.create.return_value = _fake_response("Erkannter Seiteninhalt", stop_reason="end_turn")
+    client._anthropic.messages.create.return_value = _fake_response(
+        "Erkannter Seiteninhalt", stop_reason="end_turn"
+    )
 
     result = client.extract_text_from_image(b"\xff\xd8\xff\xe0fakejpeg", media_type="image/jpeg")
 
@@ -40,5 +43,7 @@ def test_extract_text_from_image_retries_once_on_truncation():
 
     assert result.text == "vollstaendiger Text"
     assert client._anthropic.messages.create.call_count == 2
-    second_call_max_tokens = client._anthropic.messages.create.call_args_list[1].kwargs["max_tokens"]
+    second_call_max_tokens = client._anthropic.messages.create.call_args_list[1].kwargs[
+        "max_tokens"
+    ]
     assert second_call_max_tokens == 200

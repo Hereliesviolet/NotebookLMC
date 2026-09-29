@@ -8,6 +8,7 @@ Listens on two queues (architecture doc §23):
 Run one worker process per queue in production if you need different
 concurrency; for local dev a single process handling both is enough.
 """
+
 import redis
 from rq import Worker
 

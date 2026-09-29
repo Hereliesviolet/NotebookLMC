@@ -3,6 +3,7 @@
 summary/faq/timeline/briefing are fully implemented (MVP2). audio-script
 stays a 501 placeholder, planned for later.
 """
+
 from io import BytesIO
 from urllib.parse import quote
 
@@ -49,17 +50,23 @@ def _to_out(artifact: models.StudioArtifact) -> StudioArtifactOut:
     )
 
 
-async def _get_notebook_checked(db: AsyncSession, notebook_id: str, user: AuthenticatedUser) -> None:
+async def _get_notebook_checked(
+    db: AsyncSession, notebook_id: str, user: AuthenticatedUser
+) -> None:
     notebook = await notebooks_service.get_notebook_or_404(db, notebook_id)
     notebooks_service.assert_can_access(notebook, user.id)
 
 
-async def _generate(notebook_id: str, artifact_type: str, db: AsyncSession, user: AuthenticatedUser) -> StudioArtifactOut:
+async def _generate(
+    notebook_id: str, artifact_type: str, db: AsyncSession, user: AuthenticatedUser
+) -> StudioArtifactOut:
     await _get_notebook_checked(db, notebook_id, user)
     try:
         artifact = await service.generate_artifact(db, notebook_id, artifact_type)
     except service.NoIndexedSourcesError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
     except service.StudioGenerationError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
     return _to_out(artifact)
@@ -74,7 +81,8 @@ async def get_studio_artifact(
 ) -> StudioArtifactOut:
     if artifact_type not in service.STUDIO_TYPES:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=f"Unknown studio artifact type: '{artifact_type}'"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Unknown studio artifact type: '{artifact_type}'",
         )
     await _get_notebook_checked(db, notebook_id, user)
     artifact = await service.get_artifact(db, notebook_id, artifact_type)
@@ -96,13 +104,17 @@ async def export_studio_artifact(
 ) -> StreamingResponse:
     if artifact_type not in service.STUDIO_TYPES:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=f"Unknown studio artifact type: '{artifact_type}'"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Unknown studio artifact type: '{artifact_type}'",
         )
     if format not in _EXPORT_MEDIA_TYPES:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="format must be 'docx', 'pdf' or 'png'")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="format must be 'docx', 'pdf' or 'png'"
+        )
     if format == "png" and artifact_type != "mindmap":
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="PNG-Export ist nur für Mindmaps verfügbar"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="PNG-Export ist nur für Mindmaps verfügbar",
         )
 
     notebook = await notebooks_service.get_notebook_or_404(db, notebook_id)
@@ -117,7 +129,9 @@ async def export_studio_artifact(
 
     try:
         if format == "docx":
-            document = export_service.build_docx(artifact_type, notebook.title, artifact.content_json, artifact.updated_at)
+            document = export_service.build_docx(
+                artifact_type, notebook.title, artifact.content_json, artifact.updated_at
+            )
             file_bytes = export_service.render_docx_bytes(document)
         elif format == "png":
             file_bytes = export_service.build_mindmap_png(artifact.content_json)
@@ -127,66 +141,92 @@ async def export_studio_artifact(
             )
             file_bytes = export_service.render_pdf_bytes(html_content)
     except Exception as exc:
-        logger.exception("Studio export failed for notebook=%s type=%s format=%s", notebook_id, artifact_type, format)
+        logger.exception(
+            "Studio export failed for notebook=%s type=%s format=%s",
+            notebook_id,
+            artifact_type,
+            format,
+        )
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Export fehlgeschlagen: {exc}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Export fehlgeschlagen: {exc}",
         ) from exc
 
     filename_ascii = export_service.safe_filename(f"{notebook.title}-{artifact_type}", format)
     filename_utf8 = quote(f"{notebook.title}-{artifact_type}.{format}")
-    headers = {"Content-Disposition": f"attachment; filename=\"{filename_ascii}\"; filename*=UTF-8''{filename_utf8}"}
-    return StreamingResponse(BytesIO(file_bytes), media_type=_EXPORT_MEDIA_TYPES[format], headers=headers)
+    headers = {
+        "Content-Disposition": f"attachment; filename=\"{filename_ascii}\"; filename*=UTF-8''{filename_utf8}"
+    }
+    return StreamingResponse(
+        BytesIO(file_bytes), media_type=_EXPORT_MEDIA_TYPES[format], headers=headers
+    )
 
 
 @router.post("/{notebook_id}/studio/summary", response_model=StudioArtifactOut)
 async def studio_summary(
-    notebook_id: str, db: AsyncSession = Depends(get_db), user: AuthenticatedUser = Depends(get_current_user)
+    notebook_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: AuthenticatedUser = Depends(get_current_user),
 ) -> StudioArtifactOut:
     return await _generate(notebook_id, "summary", db, user)
 
 
 @router.post("/{notebook_id}/studio/faq", response_model=StudioArtifactOut)
 async def studio_faq(
-    notebook_id: str, db: AsyncSession = Depends(get_db), user: AuthenticatedUser = Depends(get_current_user)
+    notebook_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: AuthenticatedUser = Depends(get_current_user),
 ) -> StudioArtifactOut:
     return await _generate(notebook_id, "faq", db, user)
 
 
 @router.post("/{notebook_id}/studio/timeline", response_model=StudioArtifactOut)
 async def studio_timeline(
-    notebook_id: str, db: AsyncSession = Depends(get_db), user: AuthenticatedUser = Depends(get_current_user)
+    notebook_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: AuthenticatedUser = Depends(get_current_user),
 ) -> StudioArtifactOut:
     return await _generate(notebook_id, "timeline", db, user)
 
 
 @router.post("/{notebook_id}/studio/briefing", response_model=StudioArtifactOut)
 async def studio_briefing(
-    notebook_id: str, db: AsyncSession = Depends(get_db), user: AuthenticatedUser = Depends(get_current_user)
+    notebook_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: AuthenticatedUser = Depends(get_current_user),
 ) -> StudioArtifactOut:
     return await _generate(notebook_id, "briefing", db, user)
 
 
 @router.post("/{notebook_id}/studio/quiz", response_model=StudioArtifactOut)
 async def studio_quiz(
-    notebook_id: str, db: AsyncSession = Depends(get_db), user: AuthenticatedUser = Depends(get_current_user)
+    notebook_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: AuthenticatedUser = Depends(get_current_user),
 ) -> StudioArtifactOut:
     return await _generate(notebook_id, "quiz", db, user)
 
 
 @router.post("/{notebook_id}/studio/mindmap", response_model=StudioArtifactOut)
 async def studio_mindmap(
-    notebook_id: str, db: AsyncSession = Depends(get_db), user: AuthenticatedUser = Depends(get_current_user)
+    notebook_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: AuthenticatedUser = Depends(get_current_user),
 ) -> StudioArtifactOut:
     return await _generate(notebook_id, "mindmap", db, user)
 
 
 @router.post("/{notebook_id}/studio/infographic", response_model=StudioArtifactOut)
 async def studio_infographic(
-    notebook_id: str, db: AsyncSession = Depends(get_db), user: AuthenticatedUser = Depends(get_current_user)
+    notebook_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: AuthenticatedUser = Depends(get_current_user),
 ) -> StudioArtifactOut:
     return await _generate(notebook_id, "infographic", db, user)
 
 
 @router.post("/{notebook_id}/studio/audio-script")
-async def studio_audio_script(notebook_id: str, user: AuthenticatedUser = Depends(get_current_user)) -> dict:
+async def studio_audio_script(
+    notebook_id: str, user: AuthenticatedUser = Depends(get_current_user)
+) -> dict:
     _not_implemented("audio-script")

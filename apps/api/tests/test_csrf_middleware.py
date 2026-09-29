@@ -6,6 +6,7 @@ pulling in Postgres/Redis/MinIO/Qdrant just to test it in isolation. The
 full auth flow (login -> CSRF-protected write) is covered by the endpoint
 tests in test_auth_endpoints.py.
 """
+
 from starlette.applications import Starlette
 from starlette.responses import JSONResponse
 from starlette.routing import Route

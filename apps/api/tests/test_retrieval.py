@@ -18,7 +18,10 @@ def _dominant_source_scenario() -> list[RetrievedChunk]:
     dominant = [_chunk(f"dom-{i}", "source-dominant", score=0.9 - i * 0.001) for i in range(50)]
     minor_sources = []
     for source_id in ("source-a", "source-b", "source-c"):
-        minor_sources += [_chunk(f"{source_id}-0", source_id, score=0.3), _chunk(f"{source_id}-1", source_id, score=0.25)]
+        minor_sources += [
+            _chunk(f"{source_id}-0", source_id, score=0.3),
+            _chunk(f"{source_id}-1", source_id, score=0.25),
+        ]
     return dominant + minor_sources
 
 

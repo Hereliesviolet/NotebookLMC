@@ -4,6 +4,7 @@ All values that could differ between dev/staging/production - including
 Langdock model ids - are read exclusively from the environment. Nothing
 here hardcodes a real Langdock model id or API key.
 """
+
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict

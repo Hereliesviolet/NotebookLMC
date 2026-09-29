@@ -45,10 +45,14 @@ async def get_notebook_or_404(db: AsyncSession, notebook_id: str) -> models.Note
 def assert_can_access(notebook: models.Notebook, user_id: str) -> None:
     """MVP access check: owner-only. Sharing/roles (§21.3) land in MVP3."""
     if str(notebook.owner_id) != str(user_id):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No access to this notebook")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="No access to this notebook"
+        )
 
 
-async def create_notebook(db: AsyncSession, owner_id: str, payload: NotebookCreate) -> models.Notebook:
+async def create_notebook(
+    db: AsyncSession, owner_id: str, payload: NotebookCreate
+) -> models.Notebook:
     notebook = models.Notebook(
         owner_id=owner_id,
         title=payload.title,
@@ -61,7 +65,9 @@ async def create_notebook(db: AsyncSession, owner_id: str, payload: NotebookCrea
     return notebook
 
 
-async def update_notebook(db: AsyncSession, notebook: models.Notebook, payload: NotebookUpdate) -> models.Notebook:
+async def update_notebook(
+    db: AsyncSession, notebook: models.Notebook, payload: NotebookUpdate
+) -> models.Notebook:
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(notebook, field, value)
     await db.commit()

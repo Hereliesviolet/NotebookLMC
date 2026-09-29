@@ -10,6 +10,7 @@ later if exact token budgets become important):
     450-900 words with ~110 word overlap
   - table/slide/transcript/image_caption: kept as a single chunk as-is
 """
+
 from dataclasses import dataclass, field
 
 from app.parsing.sanitize import sanitize_text

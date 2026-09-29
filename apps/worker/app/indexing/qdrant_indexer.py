@@ -4,6 +4,7 @@ Payload shape matches the doc exactly:
   notebook_id, source_id, chunk_id, document_name, page_start, page_end,
   heading, chunk_type, created_at
 """
+
 from datetime import datetime, timezone
 
 from qdrant_client.http import models as qmodels
@@ -22,9 +23,13 @@ logger = get_logger(__name__)
 _UPSERT_BATCH_SIZE = 200
 
 
-def index_chunks(notebook_id: str, source_id: str, document_name: str, chunks: list, vectors: list[list[float]]) -> list[str]:
+def index_chunks(
+    notebook_id: str, source_id: str, document_name: str, chunks: list, vectors: list[list[float]]
+) -> list[str]:
     if len(chunks) != len(vectors):
-        raise ValueError(f"chunk/vector count mismatch: {len(chunks)} chunks vs {len(vectors)} vectors")
+        raise ValueError(
+            f"chunk/vector count mismatch: {len(chunks)} chunks vs {len(vectors)} vectors"
+        )
     if not chunks:
         return []
 

@@ -5,6 +5,7 @@ mapped to a user id in Redis with a sliding TTL - every read extends the
 TTL, so an active user never gets logged out mid-session, while an
 abandoned session still expires.
 """
+
 import secrets
 
 from redis import Redis

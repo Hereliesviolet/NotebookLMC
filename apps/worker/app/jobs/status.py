@@ -1,4 +1,5 @@
 """Job/source status helpers, shared by process_source and future job types."""
+
 import uuid
 from datetime import datetime, timezone
 
@@ -10,7 +11,9 @@ from app.db import models
 def get_job(db: Session, job_id: str) -> models.Job:
     job = db.get(models.Job, uuid.UUID(job_id))
     if job is None:
-        raise ValueError(f"Job {job_id} not found - it must be created by the API before enqueueing")
+        raise ValueError(
+            f"Job {job_id} not found - it must be created by the API before enqueueing"
+        )
     return job
 
 
@@ -42,7 +45,9 @@ def mark_job_failed(db: Session, job: models.Job, error_message: str) -> None:
     db.commit()
 
 
-def set_source_status(db: Session, source: models.Source, status: str, error_message: str | None = None) -> None:
+def set_source_status(
+    db: Session, source: models.Source, status: str, error_message: str | None = None
+) -> None:
     """`error_message` always overwrites (including clearing to None on
     success) so a source that fails once and later succeeds on retry
     doesn't keep showing a stale error.

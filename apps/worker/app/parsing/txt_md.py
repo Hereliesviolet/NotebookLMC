@@ -3,6 +3,7 @@
 Markdown headings (`# `, `## `, ...) are used to split into sections so
 chunking can attach a meaningful `heading` to each chunk.
 """
+
 import re
 
 from app.parsing.sanitize import sanitize_text

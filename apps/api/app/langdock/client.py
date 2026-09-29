@@ -11,13 +11,14 @@ Model ids (`LANGDOCK_PRIMARY_MODEL`, `LANGDOCK_FAST_MODEL`) are read
 exclusively from settings/.env - never hardcoded (see docs/langdock.md for
 how to discover them via the Langdock model list endpoint).
 """
+
 import json
 import time
 from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Any, Literal
 
-from anthropic import AsyncAnthropic, APIStatusError
+from anthropic import APIStatusError, AsyncAnthropic
 from openai import AsyncOpenAI
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
 
@@ -92,7 +93,9 @@ class ResponseTruncatedError(Exception):
     can offer a specific "answer too long" message instead of a generic one.
     """
 
-    def __init__(self, message: str, stop_reason: str | None, usage: "LangdockUsage | None" = None) -> None:
+    def __init__(
+        self, message: str, stop_reason: str | None, usage: "LangdockUsage | None" = None
+    ) -> None:
         super().__init__(message)
         self.stop_reason = stop_reason
         self.usage = usage
@@ -114,7 +117,9 @@ class LangdockClient:
         self._settings = settings
 
         if not settings.langdock_api_key:
-            logger.warning("LANGDOCK_API_KEY is empty - Langdock calls will fail until it is set in .env")
+            logger.warning(
+                "LANGDOCK_API_KEY is empty - Langdock calls will fail until it is set in .env"
+            )
 
         self._anthropic = AsyncAnthropic(
             api_key=settings.langdock_api_key or "unset",
@@ -126,7 +131,11 @@ class LangdockClient:
         )
 
     def _model_for(self, tier: ModelTier) -> str:
-        model = self._settings.langdock_primary_model if tier == "sonnet" else self._settings.langdock_fast_model
+        model = (
+            self._settings.langdock_primary_model
+            if tier == "sonnet"
+            else self._settings.langdock_fast_model
+        )
         if not model:
             raise RuntimeError(
                 f"No Langdock model id configured for tier={tier!r}. Set LANGDOCK_PRIMARY_MODEL / "
@@ -188,7 +197,10 @@ class LangdockClient:
         }
         if enable_thinking:
             create_kwargs["max_tokens"] = max_tokens + EXTENDED_THINKING_BUDGET_TOKENS
-            create_kwargs["thinking"] = {"type": "enabled", "budget_tokens": EXTENDED_THINKING_BUDGET_TOKENS}
+            create_kwargs["thinking"] = {
+                "type": "enabled",
+                "budget_tokens": EXTENDED_THINKING_BUDGET_TOKENS,
+            }
         if tools:
             create_kwargs["tools"] = tools
         if tool_choice:
@@ -214,13 +226,20 @@ class LangdockClient:
             latency_ms=latency_ms,
             status_code=200,
             stop_reason=getattr(response, "stop_reason", None),
-            cache_creation_input_tokens=getattr(response.usage, "cache_creation_input_tokens", None),
+            cache_creation_input_tokens=getattr(
+                response.usage, "cache_creation_input_tokens", None
+            ),
             cache_read_input_tokens=getattr(response.usage, "cache_read_input_tokens", None),
         )
         return response, usage
 
     async def _generate(
-        self, tier: ModelTier, system: str, user_message: str, max_tokens: int, enable_thinking: bool = False
+        self,
+        tier: ModelTier,
+        system: str,
+        user_message: str,
+        max_tokens: int,
+        enable_thinking: bool = False,
     ) -> LangdockTextResponse:
         response, usage = await self._call_messages(
             tier, system, user_message, max_tokens, enable_thinking=enable_thinking
@@ -228,16 +247,26 @@ class LangdockClient:
         # Bei aktiviertem Thinking enthaelt response.content zusaetzlich einen
         # thinking-Block vor dem eigentlichen Text - hier bewusst ignoriert,
         # da nur "text"-Bloecke als Antwort zaehlen.
-        text = "".join(block.text for block in response.content if getattr(block, "type", None) == "text")
+        text = "".join(
+            block.text for block in response.content if getattr(block, "type", None) == "text"
+        )
         return LangdockTextResponse(text=text, usage=usage)
 
-    async def generate_sonnet(self, system: str, user_message: str, max_tokens: int = 2048) -> LangdockTextResponse:
+    async def generate_sonnet(
+        self, system: str, user_message: str, max_tokens: int = 2048
+    ) -> LangdockTextResponse:
         """Claude Sonnet - final answers, complex analysis (architecture doc §7.1)."""
         return await self._generate(
-            "sonnet", system, user_message, max_tokens, enable_thinking=self._settings.langdock_enable_extended_thinking
+            "sonnet",
+            system,
+            user_message,
+            max_tokens,
+            enable_thinking=self._settings.langdock_enable_extended_thinking,
         )
 
-    async def generate_haiku(self, system: str, user_message: str, max_tokens: int = 512) -> LangdockTextResponse:
+    async def generate_haiku(
+        self, system: str, user_message: str, max_tokens: int = 512
+    ) -> LangdockTextResponse:
         """Claude Haiku - intent detection, query rewrite, short summaries (§7.2)."""
         return await self._generate("haiku", system, user_message, max_tokens)
 
@@ -315,7 +344,9 @@ class LangdockClient:
                 stop_reason="max_tokens",
                 usage=usage,
             )
-        tool_use_blocks = [block for block in response.content if getattr(block, "type", None) == "tool_use"]
+        tool_use_blocks = [
+            block for block in response.content if getattr(block, "type", None) == "tool_use"
+        ]
         if not tool_use_blocks:
             raise ValueError(
                 f"Langdock model did not return a tool_use block for tool={tool_name!r} "
@@ -323,7 +354,9 @@ class LangdockClient:
             )
         tool_input = tool_use_blocks[0].input
         if not isinstance(tool_input, dict):
-            raise ValueError(f"Langdock tool_use.input for tool={tool_name!r} was not a JSON object: {tool_input!r}")
+            raise ValueError(
+                f"Langdock tool_use.input for tool={tool_name!r} was not a JSON object: {tool_input!r}"
+            )
         return tool_input, usage
 
     async def tool_output(
@@ -390,7 +423,10 @@ class LangdockClient:
         """
         model = self._model_for(tier)
         async with self._anthropic.messages.stream(
-            model=model, max_tokens=max_tokens, system=system, messages=[{"role": "user", "content": user_message}]
+            model=model,
+            max_tokens=max_tokens,
+            system=system,
+            messages=[{"role": "user", "content": user_message}],
         ) as stream:
             async for text in stream.text_stream:
                 yield text
@@ -403,8 +439,12 @@ class LangdockClient:
         so this stays a TODO until that's confirmed against the real API.
         """
         if not self._settings.langdock_usage_export_enabled:
-            raise RuntimeError("Langdock usage export is disabled (LANGDOCK_USAGE_EXPORT_ENABLED=false)")
-        raise NotImplementedError("TODO: implement once the Langdock Usage Export API contract is confirmed")
+            raise RuntimeError(
+                "Langdock usage export is disabled (LANGDOCK_USAGE_EXPORT_ENABLED=false)"
+            )
+        raise NotImplementedError(
+            "TODO: implement once the Langdock Usage Export API contract is confirmed"
+        )
 
 
 def _variable_wait(backoffs: list[int]):

@@ -5,6 +5,7 @@ via an importable package (see implementation plan §7 "Empfehlung
 Code-Sharing"): api and worker stay independently deployable, and the
 settings surface here is a subset of what the API needs.
 """
+
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict

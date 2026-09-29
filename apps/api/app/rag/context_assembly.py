@@ -4,6 +4,7 @@ Qdrant only stores metadata in its payload, not the chunk text itself, so
 this step re-fetches the actual text from Postgres (the source of truth)
 before handing it to Sonnet.
 """
+
 import uuid
 
 from sqlalchemy import select
@@ -21,7 +22,9 @@ async def fetch_chunk_texts(db: AsyncSession, chunk_ids: list[str]) -> dict[str,
     return {str(chunk.id): chunk for chunk in result.scalars().all()}
 
 
-def build_context_block(chunks: list[RetrievedChunk], texts_by_chunk_id: dict[str, models.Chunk]) -> str:
+def build_context_block(
+    chunks: list[RetrievedChunk], texts_by_chunk_id: dict[str, models.Chunk]
+) -> str:
     blocks: list[str] = []
     for index, chunk in enumerate(chunks, start=1):
         db_chunk = texts_by_chunk_id.get(chunk.chunk_id)

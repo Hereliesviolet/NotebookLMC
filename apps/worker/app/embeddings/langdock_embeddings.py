@@ -4,6 +4,7 @@ Chunks -> LangdockClient.embed() -> vectors (architecture doc §7.3 / §13
 embedding flow). Requests are batched to keep individual calls small and
 retry-friendly (429 handling lives in LangdockClient itself, §23).
 """
+
 from app.core.logging import get_logger
 from app.langdock.client import get_langdock_client
 

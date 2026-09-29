@@ -40,7 +40,9 @@ async def list_sources(
     return [_to_out(s) for s in sources]
 
 
-@router.post("/notebooks/{notebook_id}/sources/upload", response_model=SourceUploadResponse, status_code=201)
+@router.post(
+    "/notebooks/{notebook_id}/sources/upload", response_model=SourceUploadResponse, status_code=201
+)
 async def upload_source(
     notebook_id: str,
     file: UploadFile = File(...),
@@ -62,12 +64,16 @@ async def upload_source(
             detail=f"File exceeds the {settings.max_upload_size_mb}MB upload limit",
         )
     if not data:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty"
+        )
 
     try:
         mime_type = resolve_mime_type(file.filename or "upload", file.content_type)
     except UnsupportedFileTypeError as exc:
-        raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail=str(exc)
+        ) from exc
 
     source = await service.create_source(
         db,
@@ -97,7 +103,9 @@ async def reprocess_source(
     await db.commit()
     await db.refresh(source)
 
-    job_id = await enqueue_process_source(db, source_id=str(source.id), notebook_id=str(source.notebook_id))
+    job_id = await enqueue_process_source(
+        db, source_id=str(source.id), notebook_id=str(source.notebook_id)
+    )
     return SourceUploadResponse(source=_to_out(source), job_id=job_id)
 
 

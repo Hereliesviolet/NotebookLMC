@@ -3,6 +3,7 @@
 Per architecture doc §22.4: never log full document content, full prompts
 with confidential source text, API keys or personal data.
 """
+
 import logging
 import sys
 

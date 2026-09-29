@@ -7,6 +7,7 @@ Storage layout (recommendation, not specified in architecture doc):
 
 Buckets are never public (§22.1); downloads always go through signed URLs.
 """
+
 import io
 from datetime import timedelta
 from functools import lru_cache
@@ -44,7 +45,9 @@ def extracted_text_path(notebook_id: str, source_id: str) -> str:
     return f"{notebook_id}/{source_id}/extracted/text.txt"
 
 
-def upload_bytes(object_path: str, data: bytes, content_type: str = "application/octet-stream") -> None:
+def upload_bytes(
+    object_path: str, data: bytes, content_type: str = "application/octet-stream"
+) -> None:
     settings = get_settings()
     client = get_minio_client()
     client.put_object(

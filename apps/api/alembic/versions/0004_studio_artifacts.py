@@ -6,11 +6,13 @@ Revision ID: 0004_studio_artifacts
 Revises: 0003_langdock_fk_cascade
 Create Date: 2026-07-05
 """
+
 from typing import Sequence, Union
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 revision: str = "0004_studio_artifacts"
 down_revision: Union[str, None] = "0003_langdock_fk_cascade"

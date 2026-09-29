@@ -5,6 +5,7 @@ unbounded parallelism):
   - "default": parsing, chunking, indexing
   - "embeddings": Langdock embedding calls, concurrency 2-4
 """
+
 from functools import lru_cache
 
 import redis
@@ -37,7 +38,9 @@ async def enqueue_process_source(db: AsyncSession, source_id: str, notebook_id: 
     references its dotted path so the two services stay independently
     deployable (no shared Python import between api and worker).
     """
-    job = models.Job(type="process_source", status="queued", source_id=source_id, notebook_id=notebook_id)
+    job = models.Job(
+        type="process_source", status="queued", source_id=source_id, notebook_id=notebook_id
+    )
     db.add(job)
     await db.commit()
     await db.refresh(job)

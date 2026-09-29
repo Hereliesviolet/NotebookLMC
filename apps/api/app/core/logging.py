@@ -4,6 +4,7 @@ Per architecture doc §22.4, we deliberately never log full document content,
 full prompts containing confidential source text, API keys or personal data.
 Only job status, error codes, token usage, model name, latency and ids.
 """
+
 import logging
 import sys
 
