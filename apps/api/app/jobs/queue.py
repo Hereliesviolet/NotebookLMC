@@ -1,9 +1,7 @@
 """Redis/RQ queue helpers used by the API to enqueue worker jobs.
 
-Two queues (embedding jobs must not run with
-unbounded parallelism):
-  - "default": parsing, chunking, indexing
-  - "embeddings": Langdock embedding calls, concurrency 2-4
+Two queue names are defined ("default" and "embeddings"). The API currently
+enqueues everything on "default"; the worker listens on both.
 """
 
 from functools import lru_cache

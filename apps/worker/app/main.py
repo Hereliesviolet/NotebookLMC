@@ -1,12 +1,9 @@
 """RQ worker entrypoint.
 
-Listens on two queues:
-  - "embeddings": Langdock embedding calls, kept separate so its
-    concurrency can be tuned independently (WORKER_EMBEDDING_CONCURRENCY).
-  - "default": parsing, chunking, Qdrant indexing, status updates.
-
-Run one worker process per queue in production if you need different
-concurrency; for local dev a single process handling both is enough.
+Listens on two queues, "embeddings" and "default". The API only enqueues
+`process_source` on "default" today, which runs parsing, chunking,
+embedding and indexing in one job. The second queue is there so embedding
+work can be split off later; a single process handles both.
 """
 
 import redis

@@ -1,7 +1,7 @@
 """Qdrant client wrapper - mirrored from apps/api/app/qdrant/client.py.
 
-Collection design: collection notebook_chunks,
-vector size 1536, cosine distance. The api service creates the collection
+Collection design: collection notebook_chunks, vector size 1536, cosine
+distance. The api service creates the collection
 on startup; `ensure_collection` is called here too as a safety net in case
 the worker's first indexing job runs before the api container is ready.
 """

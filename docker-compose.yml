@@ -33,10 +33,10 @@ services:
     container_name: notebook-frontend
     restart: unless-stopped
     environment:
-      # Server-Runtime-Env (kein Build-Arg!) fuer die rewrites() in
-      # apps/frontend/next.config.mjs - der Next.js-Server im Container proxied
-      # relative "/api/*"-Aufrufe damit selbst zu api:8000, ohne dass Caddy
-      # dafuer noetig ist (z. B. lokaler Zugriff direkt ueber Port 3000).
+      # Runtime variable (not a build arg) for the route handler in
+      # apps/frontend/app/api/[...path]/route.ts: the Next.js server proxies
+      # relative "/api/*" calls to the api service itself, so port 3000 works
+      # without Caddy.
       INTERNAL_API_URL: ${INTERNAL_API_URL:-http://api:8000}
     ports:
       - "${BIND_ADDRESS:-127.0.0.1}:3000:3000"
@@ -148,8 +148,8 @@ services:
       timeout: 5s
       retries: 10
 
-  # Creates the notebook-files bucket on startup. Recommendation from the
-  # implementation plan so the bucket exists without a manual setup step.
+  # Creates the notebook-files bucket on startup so no manual setup step is
+  # needed.
   minio-init:
     image: minio/mc:latest
     container_name: notebook-minio-init

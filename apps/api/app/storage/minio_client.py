@@ -2,10 +2,9 @@
 
 Storage layout:
   notebook-files/{notebook_id}/{source_id}/original/{filename}
-  notebook-files/{notebook_id}/{source_id}/extracted/text.txt
-  notebook-files/{notebook_id}/{source_id}/extracted/tables/*.md
 
-Buckets are never public; downloads always go through signed URLs.
+The bucket is never public. `get_presigned_download_url` is the intended way
+to hand out files, but no endpoint uses it yet.
 """
 
 import io
