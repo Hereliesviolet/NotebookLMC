@@ -6,6 +6,8 @@
 
 A self-hosted, NotebookLM-style application: upload documents into notebooks, ask questions about them, and generate summaries, FAQs, quizzes and mind maps. Chat answers cite chunks of the uploaded sources, and the API checks each citation against the notebook's chunks in the database before returning it. Not affiliated with Google.
 
+![Chat with cited answers in a notebook, sources on the left, Studio on the right](docs/screenshots/chat-citations.png)
+
 ## Features
 
 - Notebooks with source upload for PDF, DOCX, TXT, Markdown, HTML, CSV and XLSX (50 MB per file by default).
@@ -16,6 +18,30 @@ A self-hosted, NotebookLM-style application: upload documents into notebooks, as
 - Login with Argon2 password hashes, server-side sessions in Redis, CSRF protection and rate limits on login and registration.
 - All model calls go through [Langdock](https://langdock.com); no code path talks to a model provider directly.
 - The UI, prompts and error messages are in German.
+
+## Screenshots
+
+The UI is in German. All screenshots use generated demo data: fictional documents, the user `demo@example.com`, and invented questions, answers and Studio artifacts. They were taken from a local instance (frontend, API, PostgreSQL and Redis) with the data inserted directly into the database; no model was called, and the last chat answer in the first image was a canned response.
+
+![Login page](docs/screenshots/login.png)
+
+Login page.
+
+![Notebook overview with nine demo notebooks](docs/screenshots/notebooks.png)
+
+Notebook overview.
+
+![Notebook with source list, chat history and Studio panel](docs/screenshots/notebook-sources.png)
+
+Notebook detail page: sources on the left, chat in the middle, Studio on the right.
+
+![Mind map rendered in the Studio](docs/screenshots/studio-mindmap.png)
+
+Studio: mind map.
+
+![Briefing rendered in the Studio](docs/screenshots/studio-briefing.png)
+
+Studio: briefing.
 
 ## Tech stack
 
