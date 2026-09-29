@@ -1,4 +1,4 @@
-"""Studio endpoints (architecture doc §19, §26.5).
+"""Studio endpoints.
 
 summary/faq/timeline/briefing are fully implemented (MVP2). audio-script
 stays a 501 placeholder, planned for later.
@@ -33,7 +33,7 @@ _EXPORT_MEDIA_TYPES = {
 def _not_implemented(name: str) -> None:
     raise HTTPException(
         status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail=f"Studio feature '{name}' is planned for MVP2, see docs/architecture.md §19",
+        detail=f"Studio feature '{name}' is not implemented",
     )
 
 

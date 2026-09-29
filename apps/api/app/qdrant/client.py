@@ -1,6 +1,6 @@
 """Qdrant client wrapper.
 
-Collection design per architecture doc §15:
+Collection design:
   - collection: notebook_chunks
   - vector size: 1536 (text-embedding-ada-002 via Langdock)
   - distance: cosine
@@ -60,8 +60,7 @@ def ensure_collection(client: QdrantClient | None = None) -> None:
 
 def delete_points_by_source(source_id: str, client: QdrantClient | None = None) -> None:
     """Removes all points for a source (via the `source_id` payload index) so
-    deleting a source doesn't leave orphaned vectors behind (architecture doc
-    §22.3 deletion concept).
+    deleting a source doesn't leave orphaned vectors behind.
     """
     settings = get_settings()
     client = client or get_qdrant_client()

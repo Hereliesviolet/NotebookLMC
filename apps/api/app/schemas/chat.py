@@ -1,6 +1,6 @@
 """Chat request/response schemas.
 
-The response schema mirrors the output schema from architecture doc §18.2
+The response schema mirrors packages/prompts/output_schema.json
 exactly, so the LLM's structured output can be validated and passed through
 with minimal transformation.
 """

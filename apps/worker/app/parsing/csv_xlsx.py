@@ -1,8 +1,7 @@
 """CSV/XLSX parsing via pandas.
 
-Tables are emitted as their own chunks in Markdown format (architecture doc
-§14.5), split into row batches so a single huge spreadsheet doesn't become
-one unusably large chunk.
+Tables are emitted as their own chunks in Markdown format, split into row batches so a single huge
+spreadsheet doesn't become one unusably large chunk.
 """
 
 import io

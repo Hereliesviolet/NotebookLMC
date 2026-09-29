@@ -45,7 +45,7 @@ async def chat(
     db: AsyncSession = Depends(get_db),
     user: AuthenticatedUser = Depends(get_current_user),
 ) -> ChatResponse:
-    """RAG chat endpoint - full flow per architecture doc §16/§29 and
+    """RAG chat endpoint - full flow, see
     docs/rag-pipeline.md: intent detection -> query rewrite -> embedding ->
     Qdrant retrieval -> context assembly -> Sonnet -> citation validation.
     """

@@ -1,8 +1,7 @@
 """SQLAlchemy models.
 
-Mirrors the data model defined in the architecture doc §13.1-13.10 exactly
-(table names and columns). UUID primary keys are an addition on top of the
-doc, which does not specify an id type.
+Table definitions for the API service (see docs/architecture.md). UUID
+primary keys throughout.
 """
 
 import uuid
@@ -190,8 +189,8 @@ class AuditEvent(Base):
 
 
 class StudioArtifact(Base):
-    """Generated Studio outputs (summary/faq/timeline/briefing, architecture
-    doc §19/§26.5). At most one row per (notebook_id, type) - "Neu generieren"
+    """Generated Studio outputs (summary/faq/timeline/briefing/...).
+    At most one row per (notebook_id, type) - "Neu generieren"
     upserts instead of accumulating history.
     """
 

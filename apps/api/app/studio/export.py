@@ -1,5 +1,5 @@
 """Server-side Word (.docx) / PDF / PNG export for Studio artifacts
-(architecture doc §19). Renders a persisted artifact's `content_json` (shape
+Renders a persisted artifact's `content_json` (shape
 depends on `type`, see packages/prompts/studio_*_tool_schema.json) into a
 docx.Document and into an HTML string (rendered to PDF via WeasyPrint),
 styled to match the in-app Studio views

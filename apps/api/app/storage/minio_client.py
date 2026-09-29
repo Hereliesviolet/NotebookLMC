@@ -1,11 +1,11 @@
 """MinIO client wrapper.
 
-Storage layout (recommendation, not specified in architecture doc):
+Storage layout:
   notebook-files/{notebook_id}/{source_id}/original/{filename}
   notebook-files/{notebook_id}/{source_id}/extracted/text.txt
   notebook-files/{notebook_id}/{source_id}/extracted/tables/*.md
 
-Buckets are never public (§22.1); downloads always go through signed URLs.
+Buckets are never public; downloads always go through signed URLs.
 """
 
 import io

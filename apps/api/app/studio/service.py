@@ -1,5 +1,5 @@
-"""Studio artifact generation (summary/faq/timeline/briefing, architecture
-doc §19/§26.5): notebook-wide context -> Sonnet tool-use -> upsert into
+"""Studio artifact generation (summary/faq/timeline/briefing/...):
+notebook-wide context -> Sonnet tool-use -> upsert into
 studio_artifacts. Same building blocks as chat/service.py, but over
 notebook-wide context instead of query-based retrieval, and always exactly
 one persisted row per (notebook_id, type).

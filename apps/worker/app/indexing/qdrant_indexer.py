@@ -1,4 +1,4 @@
-"""Qdrant upsert for chunk embeddings (architecture doc §15).
+"""Qdrant upsert for chunk embeddings.
 
 Payload shape matches the doc exactly:
   notebook_id, source_id, chunk_id, document_name, page_start, page_end,

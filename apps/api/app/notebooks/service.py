@@ -43,7 +43,7 @@ async def get_notebook_or_404(db: AsyncSession, notebook_id: str) -> models.Note
 
 
 def assert_can_access(notebook: models.Notebook, user_id: str) -> None:
-    """MVP access check: owner-only. Sharing/roles (§21.3) land in MVP3."""
+    """MVP access check: owner-only. Sharing/roles are not implemented."""
     if str(notebook.owner_id) != str(user_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="No access to this notebook"

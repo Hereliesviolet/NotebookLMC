@@ -1,4 +1,4 @@
-"""Chat / RAG orchestration (architecture doc §16.1, full sequence):
+"""Chat / RAG orchestration (full sequence):
 
 User Question -> [Haiku Intent Detection] -> [Haiku Query Rewrite]
               -> Langdock Query Embedding -> Qdrant Similarity Search
@@ -249,7 +249,7 @@ async def _persist_assistant_message(
 
 
 async def _log_langdock_request(db: AsyncSession, notebook_id: str, user_id: str, usage) -> None:
-    """Best-effort audit trail (architecture doc §13.10 langdock_requests)."""
+    """Best-effort audit trail (langdock_requests table)."""
     try:
         db.add(
             models.LangdockRequest(

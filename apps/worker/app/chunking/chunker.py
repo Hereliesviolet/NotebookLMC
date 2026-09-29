@@ -1,4 +1,4 @@
-"""Chunking strategy (architecture doc §14.5).
+"""Chunking strategy.
 
 Not blind fixed-length chunking: we chunk within the heading/section
 structure already produced by parsing, and only apply a sliding window to

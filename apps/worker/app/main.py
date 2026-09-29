@@ -1,6 +1,6 @@
 """RQ worker entrypoint.
 
-Listens on two queues (architecture doc §23):
+Listens on two queues:
   - "embeddings": Langdock embedding calls, kept separate so its
     concurrency can be tuned independently (WORKER_EMBEDDING_CONCURRENCY).
   - "default": parsing, chunking, Qdrant indexing, status updates.

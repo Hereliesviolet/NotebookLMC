@@ -1,7 +1,6 @@
 """Langdock gateway client - worker side.
 
-Mirrors apps/api/app/langdock/client.py (see that file's docstring and the
-implementation plan's "Empfehlung Code-Sharing" note on why this is
+Mirrors apps/api/app/langdock/client.py (see docs/architecture.md on why this is
 duplicated rather than imported from a shared package). The worker mainly
 needs `embed()`; `generate_haiku`/`generate_sonnet` are kept available for
 future worker-side jobs that need LLM calls.

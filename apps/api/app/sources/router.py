@@ -49,7 +49,7 @@ async def upload_source(
     db: AsyncSession = Depends(get_db),
     user: AuthenticatedUser = Depends(get_current_user),
 ) -> SourceUploadResponse:
-    """Upload pipeline step 1-5 (architecture doc §14.3):
+    """Upload pipeline step 1-5:
     validate -> store in MinIO -> create `sources` row -> enqueue worker job.
     """
     notebook = await notebooks_service.get_notebook_or_404(db, notebook_id)

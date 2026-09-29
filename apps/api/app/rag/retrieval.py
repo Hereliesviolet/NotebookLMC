@@ -1,8 +1,8 @@
-"""Qdrant retrieval step of the RAG pipeline (architecture doc §16.3).
+"""Qdrant retrieval step of the RAG pipeline.
 
 Dense vector search scoped to the current notebook (+ optional source
 filter), with a simple MVP score/order heuristic instead of full LLM
-reranking (§7.4 - Haiku reranking is a documented future upgrade, disabled
+reranking (Haiku reranking is a possible future upgrade, disabled
 by RERANKER_ENABLED=false by default).
 """
 
@@ -146,7 +146,7 @@ def apply_score_heuristic(
     top_k: int = CONTEXT_TOP_K,
     max_chunks_per_source: int | None = None,
 ) -> list[RetrievedChunk]:
-    """MVP heuristic (architecture doc §7.4) with a per-source diversity guarantee.
+    """MVP heuristic with a per-source diversity guarantee.
 
     Plain global top-k by score lets one large/generic source occupy every
     slot on broad questions, silently excluding a notebook's other sources

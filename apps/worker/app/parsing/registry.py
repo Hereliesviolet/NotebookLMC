@@ -1,8 +1,8 @@
 """Dispatches to the right parser based on MIME type / file extension.
 
-Supported MVP file types (architecture doc §14.1): PDF, DOCX, TXT, Markdown,
+Supported MVP file types: PDF, DOCX, TXT, Markdown,
 HTML, CSV, XLSX. PowerPoint/Audio/Video/OCR are documented as later
-extensions (§14.2), not implemented here.
+extensions, not implemented here.
 """
 
 from app.parsing.csv_xlsx import parse_csv, parse_xlsx

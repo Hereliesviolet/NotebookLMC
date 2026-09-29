@@ -1,5 +1,5 @@
 """initial schema - users, notebooks, notebook_members, sources, chunks,
-messages, notes, jobs, audit_events, langdock_requests (architecture doc §13)
+messages, notes, jobs, audit_events, langdock_requests
 
 Revision ID: 0001_initial
 Revises:

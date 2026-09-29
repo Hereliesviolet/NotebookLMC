@@ -1,8 +1,8 @@
 """Worker settings.
 
 Deliberately duplicated from apps/api/app/core/config.py rather than shared
-via an importable package (see implementation plan §7 "Empfehlung
-Code-Sharing"): api and worker stay independently deployable, and the
+via an importable package: api and worker stay independently
+deployable, and the
 settings surface here is a subset of what the API needs.
 """
 

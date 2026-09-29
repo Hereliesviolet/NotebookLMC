@@ -1,4 +1,4 @@
-"""Single Langdock gateway client (architecture doc §17.1).
+"""Single Langdock gateway client.
 
 Every AI call in this app goes through this class - no direct calls to
 OpenAI/Anthropic/etc anywhere else in the codebase. It wraps two
@@ -102,9 +102,8 @@ class ResponseTruncatedError(Exception):
 
 
 class LangdockClient:
-    """Async client (architecture doc §17.1 updated for the apps/api async
-    migration): apps/api runs a single asyncio event loop per Uvicorn worker
-    process, so every Langdock call here uses the SDKs' async variants
+    """Async client: apps/api runs a single asyncio event loop per Uvicorn
+    worker process, so every Langdock call here uses the SDKs' async variants
     (`AsyncAnthropic`/`AsyncOpenAI`) instead of blocking that loop for the
     call's entire duration. This class is only used within apps/api - the
     worker service (apps/worker) has its own separate, still-synchronous
@@ -255,7 +254,7 @@ class LangdockClient:
     async def generate_sonnet(
         self, system: str, user_message: str, max_tokens: int = 2048
     ) -> LangdockTextResponse:
-        """Claude Sonnet - final answers, complex analysis (architecture doc §7.1)."""
+        """Claude Sonnet - final answers, complex analysis."""
         return await self._generate(
             "sonnet",
             system,
@@ -267,7 +266,7 @@ class LangdockClient:
     async def generate_haiku(
         self, system: str, user_message: str, max_tokens: int = 512
     ) -> LangdockTextResponse:
-        """Claude Haiku - intent detection, query rewrite, short summaries (§7.2)."""
+        """Claude Haiku - intent detection, query rewrite, short summaries."""
         return await self._generate("haiku", system, user_message, max_tokens)
 
     async def structured_output(
@@ -377,11 +376,11 @@ class LangdockClient:
         )
 
     async def embed(self, texts: list[str]) -> LangdockEmbeddingResponse:
-        """Langdock OpenAI-compatible embeddings (architecture doc §7.3).
+        """Langdock OpenAI-compatible embeddings.
 
         Always uses EMBEDDING_MODEL (text-embedding-ada-002) and never
         Sonnet/Haiku - embeddings are a separate task class in the model
-        router (see model_router.py). Accepts multiple texts in one call
+        router. Accepts multiple texts in one call
         (batched) - callers with several queries should pass them all at
         once instead of looping with one text per call.
         """
@@ -416,8 +415,8 @@ class LangdockClient:
     async def stream(self, tier: ModelTier, system: str, user_message: str, max_tokens: int = 2048):
         """Streaming Sonnet/Haiku responses.
 
-        Prepared per architecture doc §17.1 but not consumed by the MVP
-        chat endpoint yet (which returns a single validated JSON payload).
+        Not consumed by the chat endpoint yet (which returns a single
+        validated JSON payload).
         Wire this up to Server-Sent Events on /chat once streaming UX is
         prioritized.
         """
@@ -432,11 +431,11 @@ class LangdockClient:
                 yield text
 
     def usage_export(self) -> list[dict[str, Any]]:
-        """Optional Langdock Usage Export API (architecture doc §4, §17.2).
+        """Optional Langdock Usage Export API.
 
         Disabled by default (LANGDOCK_USAGE_EXPORT_ENABLED=false). No
-        documented request/response shape is given in the architecture doc,
-        so this stays a TODO until that's confirmed against the real API.
+        request/response shape has been confirmed against the real API, so
+        this stays a TODO.
         """
         if not self._settings.langdock_usage_export_enabled:
             raise RuntimeError(

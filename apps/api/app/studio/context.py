@@ -1,5 +1,5 @@
 """Notebook-wide context assembly for Studio artifacts (summary/faq/timeline/
-briefing, architecture doc §19). Unlike chat/service.py's query-based
+briefing). Unlike chat/service.py's query-based
 retrieval, Studio needs a representative sample of every indexed source, not
 the chunks most similar to a specific question - so this reads Postgres
 directly ordered by chunk_index instead of doing a Qdrant vector search.

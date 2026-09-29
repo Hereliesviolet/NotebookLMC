@@ -1,4 +1,4 @@
-"""Builds the LLM context block from retrieved chunks (architecture doc §16.4).
+"""Builds the LLM context block from retrieved chunks.
 
 Qdrant only stores metadata in its payload, not the chunk text itself, so
 this step re-fetches the actual text from Postgres (the source of truth)

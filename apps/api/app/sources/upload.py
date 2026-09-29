@@ -1,8 +1,7 @@
-"""File type validation for uploads (architecture doc §14.1 / §22.1).
+"""File type validation for uploads.
 
 Kept separate from service.py so the supported-type list is easy to find
-and extend (PowerPoint/Audio/Video/OCR are explicitly out of scope for the
-MVP, per §14.2).
+and extend (PowerPoint/Audio/Video/OCR are explicitly out of scope for now).
 """
 
 import mimetypes

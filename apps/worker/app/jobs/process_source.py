@@ -1,4 +1,4 @@
-"""Main document processing job (architecture doc §14.3 pipeline):
+"""Main document processing job (pipeline):
 
 Upload -> MinIO (already done by the API) -> [this job] -> parse -> chunk
 -> Langdock embeddings -> Qdrant upsert -> source.status = indexed

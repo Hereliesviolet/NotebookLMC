@@ -1,10 +1,9 @@
-"""Self-hosted citation validation (architecture doc §16.6).
+"""Self-hosted citation validation.
 
 Never trust the LLM's citations blindly: check that every cited
 source_id/chunk_id actually exists, belongs to this notebook, and that any
 claimed page numbers are plausible. Unknown/hallucinated citations are
-dropped rather than blocking the whole answer (MVP robustness
-recommendation from the implementation plan §15).
+dropped rather than blocking the whole answer.
 """
 
 import uuid

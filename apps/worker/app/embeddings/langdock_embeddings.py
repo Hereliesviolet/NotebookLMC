@@ -1,8 +1,7 @@
 """Batch embedding calls via Langdock (OpenAI-compatible endpoint, ada-002).
 
-Chunks -> LangdockClient.embed() -> vectors (architecture doc §7.3 / §13
-embedding flow). Requests are batched to keep individual calls small and
-retry-friendly (429 handling lives in LangdockClient itself, §23).
+Chunks -> LangdockClient.embed() -> vectors. Requests are batched to keep individual calls small and
+retry-friendly (429 handling lives in LangdockClient itself).
 """
 
 from app.core.logging import get_logger

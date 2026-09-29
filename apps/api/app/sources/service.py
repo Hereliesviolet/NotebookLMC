@@ -44,7 +44,7 @@ async def create_source(
 
 async def delete_source_and_artifacts(db: AsyncSession, source: models.Source) -> None:
     """Removes DB row, chunks (cascade via FK), the MinIO object and the
-    Qdrant points (§22.3 deletion concept). Jobs referencing this source
+    Qdrant points. Jobs referencing this source
     cascade-delete at the DB level too (jobs_source_id_fkey ON DELETE CASCADE).
     """
     if source.storage_path:
