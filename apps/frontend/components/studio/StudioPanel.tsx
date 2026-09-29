@@ -25,13 +25,43 @@ interface StudioFeature {
 }
 
 const STUDIO_FEATURES: StudioFeature[] = [
-  { type: "summary", icon: FileText, title: "Zusammenfassung", description: "Notebook- und Quellenzusammenfassungen" },
-  { type: "faq", icon: HelpCircle, title: "FAQ", description: "Häufige Fragen aus den Quellen ableiten" },
-  { type: "timeline", icon: GanttChartSquare, title: "Timeline", description: "Chronologie über mehrere Quellen" },
-  { type: "briefing", icon: ClipboardList, title: "Briefing", description: "Kompaktes Entscheidungs-Briefing" },
+  {
+    type: "summary",
+    icon: FileText,
+    title: "Zusammenfassung",
+    description: "Notebook- und Quellenzusammenfassungen",
+  },
+  {
+    type: "faq",
+    icon: HelpCircle,
+    title: "FAQ",
+    description: "Häufige Fragen aus den Quellen ableiten",
+  },
+  {
+    type: "timeline",
+    icon: GanttChartSquare,
+    title: "Timeline",
+    description: "Chronologie über mehrere Quellen",
+  },
+  {
+    type: "briefing",
+    icon: ClipboardList,
+    title: "Briefing",
+    description: "Kompaktes Entscheidungs-Briefing",
+  },
   { type: "quiz", icon: Brain, title: "Quiz", description: "Wissen zu den Quellen testen" },
-  { type: "mindmap", icon: Network, title: "Mindmap", description: "Themen als Baumstruktur visualisieren" },
-  { type: "infographic", icon: LayoutTemplate, title: "Infografik", description: "Kernaussagen als Grafik zusammenfassen" },
+  {
+    type: "mindmap",
+    icon: Network,
+    title: "Mindmap",
+    description: "Themen als Baumstruktur visualisieren",
+  },
+  {
+    type: "infographic",
+    icon: LayoutTemplate,
+    title: "Infografik",
+    description: "Kernaussagen als Grafik zusammenfassen",
+  },
 ];
 
 type ArtifactStatus = StudioArtifact<unknown> | null | undefined;
@@ -42,19 +72,19 @@ export function StudioPanel({ notebookId }: { notebookId: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.allSettled(STUDIO_FEATURES.map((feature) => getStudioArtifact<unknown>(notebookId, feature.type))).then(
-      (results) => {
-        if (cancelled) return;
-        setStatuses(
-          Object.fromEntries(
-            STUDIO_FEATURES.map((feature, index) => {
-              const result = results[index];
-              return [feature.type, result.status === "fulfilled" ? result.value : null];
-            })
-          )
-        );
-      }
-    );
+    Promise.allSettled(
+      STUDIO_FEATURES.map((feature) => getStudioArtifact<unknown>(notebookId, feature.type))
+    ).then((results) => {
+      if (cancelled) return;
+      setStatuses(
+        Object.fromEntries(
+          STUDIO_FEATURES.map((feature, index) => {
+            const result = results[index];
+            return [feature.type, result.status === "fulfilled" ? result.value : null];
+          })
+        )
+      );
+    });
     return () => {
       cancelled = true;
     };
@@ -109,7 +139,9 @@ export function StudioPanel({ notebookId }: { notebookId: string }) {
           type={active.type}
           title={active.title}
           onClose={() => setActiveType(null)}
-          onArtifactChange={(artifact) => setStatuses((prev) => ({ ...prev, [active.type]: artifact }))}
+          onArtifactChange={(artifact) =>
+            setStatuses((prev) => ({ ...prev, [active.type]: artifact }))
+          }
         />
       )}
     </div>

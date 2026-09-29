@@ -16,7 +16,9 @@ export function NotesPanel({ notebookId }: { notebookId: string }) {
   const [content, setContent] = useState("");
 
   useEffect(() => {
-    listNotes(notebookId).then(setNotes).catch(() => undefined);
+    listNotes(notebookId)
+      .then(setNotes)
+      .catch(() => undefined);
   }, [notebookId]);
 
   async function handleCreate() {
@@ -44,7 +46,12 @@ export function NotesPanel({ notebookId }: { notebookId: string }) {
         <Card>
           <CardContent className="flex flex-col gap-2 p-3">
             <Input placeholder="Titel" value={title} onChange={(e) => setTitle(e.target.value)} />
-            <Textarea placeholder="Inhalt" rows={3} value={content} onChange={(e) => setContent(e.target.value)} />
+            <Textarea
+              placeholder="Inhalt"
+              rows={3}
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+            />
             <Button size="sm" onClick={handleCreate}>
               Speichern
             </Button>
@@ -64,7 +71,9 @@ export function NotesPanel({ notebookId }: { notebookId: string }) {
       ))}
 
       {notes.length === 0 && !creating && (
-        <p className="text-xs text-muted-foreground">Noch keine Notizen. Übernimm Antworten aus dem Chat oder lege eine neue Notiz an.</p>
+        <p className="text-xs text-muted-foreground">
+          Noch keine Notizen. Übernimm Antworten aus dem Chat oder lege eine neue Notiz an.
+        </p>
       )}
     </div>
   );

@@ -19,7 +19,9 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const isPublicRoute = PUBLIC_ROUTES.has(pathname);
-  const [status, setStatus] = useState<"checking" | "authenticated">(isPublicRoute ? "authenticated" : "checking");
+  const [status, setStatus] = useState<"checking" | "authenticated">(
+    isPublicRoute ? "authenticated" : "checking"
+  );
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
@@ -42,7 +44,11 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }
 
   if (status === "checking") {
-    return <div className="flex h-screen items-center justify-center text-sm text-muted-foreground">Lädt…</div>;
+    return (
+      <div className="flex h-screen items-center justify-center text-sm text-muted-foreground">
+        Lädt…
+      </div>
+    );
   }
 
   return (

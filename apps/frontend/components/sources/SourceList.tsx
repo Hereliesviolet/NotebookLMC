@@ -15,7 +15,9 @@ export function SourceList({ notebookId }: { notebookId: string }) {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const refresh = useCallback(() => {
-    listSources(notebookId).then(setSources).catch(() => undefined);
+    listSources(notebookId)
+      .then(setSources)
+      .catch(() => undefined);
   }, [notebookId]);
 
   useEffect(() => {

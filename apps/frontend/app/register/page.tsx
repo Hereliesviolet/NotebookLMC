@@ -48,7 +48,9 @@ export default function RegisterPage() {
           <CardHeader className="items-center text-center">
             <NotebookText className="mb-2 h-8 w-8 text-primary" />
             <CardTitle>Konto erstellt</CardTitle>
-            <CardDescription>Du kannst dich jetzt mit deinen Zugangsdaten anmelden.</CardDescription>
+            <CardDescription>
+              Du kannst dich jetzt mit deinen Zugangsdaten anmelden.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <Button className="w-full" onClick={() => router.replace("/login")}>
@@ -72,7 +74,13 @@ export default function RegisterPage() {
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-medium text-muted-foreground">Name</label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} required autoFocus autoComplete="name" />
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+                autoFocus
+                autoComplete="name"
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-medium text-muted-foreground">E-Mail</label>
@@ -94,12 +102,16 @@ export default function RegisterPage() {
                 minLength={MIN_PASSWORD_LENGTH}
                 autoComplete="new-password"
               />
-              <p className="text-xs text-muted-foreground">Mindestens {MIN_PASSWORD_LENGTH} Zeichen.</p>
+              <p className="text-xs text-muted-foreground">
+                Mindestens {MIN_PASSWORD_LENGTH} Zeichen.
+              </p>
             </div>
             {error && <p className="text-xs text-red-600">{error}</p>}
             <Button
               type="submit"
-              disabled={submitting || !name.trim() || !email.trim() || password.length < MIN_PASSWORD_LENGTH}
+              disabled={
+                submitting || !name.trim() || !email.trim() || password.length < MIN_PASSWORD_LENGTH
+              }
               className="w-full"
             >
               {submitting ? "Wird erstellt…" : "Registrieren"}

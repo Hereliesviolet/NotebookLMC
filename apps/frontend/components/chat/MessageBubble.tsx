@@ -39,7 +39,11 @@ export function MessageBubble({
           isUser ? "bg-primary text-primary-foreground" : "bg-muted"
         )}
       >
-        {isUser ? <p className="whitespace-pre-wrap">{content}</p> : <MarkdownContent content={content} />}
+        {isUser ? (
+          <p className="whitespace-pre-wrap">{content}</p>
+        ) : (
+          <MarkdownContent content={content} />
+        )}
         {confidence && (
           <div className="mt-2">
             <Badge variant={CONFIDENCE_VARIANT[confidence]}>Konfidenz: {confidence}</Badge>
@@ -50,11 +54,17 @@ export function MessageBubble({
       {citations.length > 0 && (
         <Collapsible
           className="w-full max-w-2xl"
-          trigger={(open) => <span>{open ? "Quellen ausblenden" : `Quellen anzeigen (${citations.length})`}</span>}
+          trigger={(open) => (
+            <span>{open ? "Quellen ausblenden" : `Quellen anzeigen (${citations.length})`}</span>
+          )}
         >
           <div className="grid gap-2 sm:grid-cols-2">
             {citations.map((citation, index) => (
-              <CitationCard key={`${citation.chunk_id}-${index}`} citation={citation} index={index} />
+              <CitationCard
+                key={`${citation.chunk_id}-${index}`}
+                citation={citation}
+                index={index}
+              />
             ))}
           </div>
         </Collapsible>

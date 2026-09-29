@@ -90,7 +90,8 @@ export function StudioFullscreenOverlay({
         if (!cancelled) setArtifact(result);
       })
       .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Inhalt konnte nicht geladen werden.");
+        if (!cancelled)
+          setError(err instanceof Error ? err.message : "Inhalt konnte nicht geladen werden.");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -145,16 +146,27 @@ export function StudioFullscreenOverlay({
           <div>
             <h2 className="text-base font-semibold text-foreground">{title}</h2>
             {artifact && (
-              <p className="text-xs text-muted-foreground">Zuletzt aktualisiert: {formatDate(artifact.updated_at)}</p>
+              <p className="text-xs text-muted-foreground">
+                Zuletzt aktualisiert: {formatDate(artifact.updated_at)}
+              </p>
             )}
           </div>
           <div className="flex items-center gap-2">
             {artifact && type !== "quiz" && (
               <div className="relative">
-                <Button variant="outline" size="sm" onClick={() => setExportMenuOpen((value) => !value)}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setExportMenuOpen((value) => !value)}
+                >
                   <Download className="h-3.5 w-3.5" />
                   Exportieren
-                  <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", exportMenuOpen && "rotate-180")} />
+                  <ChevronDown
+                    className={cn(
+                      "h-3.5 w-3.5 transition-transform",
+                      exportMenuOpen && "rotate-180"
+                    )}
+                  />
                 </Button>
                 {exportMenuOpen && (
                   <div className="absolute right-0 top-full z-10 mt-1 w-40 overflow-hidden rounded-md border border-border bg-card shadow-lg">
@@ -171,7 +183,9 @@ export function StudioFullscreenOverlay({
                         className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-muted disabled:opacity-50"
                       >
                         Als {format === "docx" ? "Word" : format === "pdf" ? "PDF" : "PNG"}
-                        {exportFormat === format && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                        {exportFormat === format && (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        )}
                       </button>
                     ))}
                   </div>
@@ -203,7 +217,12 @@ export function StudioFullscreenOverlay({
           </div>
         </header>
 
-        <div className={cn("flex-1 overflow-y-auto", type === "mindmap" ? "flex flex-col p-6" : "px-6 py-8")}>
+        <div
+          className={cn(
+            "flex-1 overflow-y-auto",
+            type === "mindmap" ? "flex flex-col p-6" : "px-6 py-8"
+          )}
+        >
           <div className={cn(type === "mindmap" ? "flex flex-1 flex-col" : "mx-auto max-w-4xl")}>
             {loading && <p className="text-sm text-muted-foreground">Lädt…</p>}
             {!loading && error && <p className="text-sm text-red-600">{error}</p>}
@@ -225,7 +244,11 @@ export function StudioFullscreenOverlay({
             )}
 
             {!loading && artifact && (
-              <StudioArtifactContent type={type} content={artifact.content} renderRefreshKey={renderRefreshKey} />
+              <StudioArtifactContent
+                type={type}
+                content={artifact.content}
+                renderRefreshKey={renderRefreshKey}
+              />
             )}
           </div>
         </div>

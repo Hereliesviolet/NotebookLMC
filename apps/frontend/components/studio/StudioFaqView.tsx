@@ -13,7 +13,9 @@ export function StudioFaqView({ content }: { content: StudioFaqContent }) {
           key={index}
           className="rounded-md border border-border px-4 py-3"
           triggerClassName="w-full justify-between text-left"
-          trigger={() => <span className="pr-2 text-sm font-medium text-foreground">{item.question}</span>}
+          trigger={() => (
+            <span className="pr-2 text-sm font-medium text-foreground">{item.question}</span>
+          )}
         >
           <p className="text-sm leading-relaxed text-muted-foreground">{item.answer}</p>
         </Collapsible>

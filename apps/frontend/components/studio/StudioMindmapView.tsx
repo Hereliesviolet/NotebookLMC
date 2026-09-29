@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import {
   Background,
   BackgroundVariant,
@@ -156,20 +162,34 @@ function buildMindmapGraph(content: StudioMindmapContent): { nodes: MindmapNode[
   const branchRadius = Math.max(BRANCH_BASE_RADIUS, branchCount * 55);
 
   const nodes: MindmapNode[] = [
-    { id: "root", type: "root", position: { x: 0, y: 0 }, data: { label: content.root.label }, draggable: true },
+    {
+      id: "root",
+      type: "root",
+      position: { x: 0, y: 0 },
+      data: { label: content.root.label },
+      draggable: true,
+    },
   ];
   const edges: Edge[] = [];
 
   branches.forEach((branch, branchIndex) => {
     const branchAngle = (branchIndex / branchCount) * 2 * Math.PI - Math.PI / 2;
     const branchId = `branch-${branchIndex}`;
-    const branchPos = { x: Math.cos(branchAngle) * branchRadius, y: Math.sin(branchAngle) * branchRadius };
+    const branchPos = {
+      x: Math.cos(branchAngle) * branchRadius,
+      y: Math.sin(branchAngle) * branchRadius,
+    };
 
     nodes.push({
       id: branchId,
       type: "branch",
       position: branchPos,
-      data: { label: branch.label, hasChildren: branch.children.length > 0, collapsed: false, branchId },
+      data: {
+        label: branch.label,
+        hasChildren: branch.children.length > 0,
+        collapsed: false,
+        branchId,
+      },
       draggable: true,
     });
     edges.push(buildEdge("root", branchId, { x: 0, y: 0 }, branchPos));
@@ -182,13 +202,20 @@ function buildMindmapGraph(content: StudioMindmapContent): { nodes: MindmapNode[
 
     branch.children.forEach((leaf, leafIndex) => {
       const leafAngle =
-        leafCount === 1 ? branchAngle : branchAngle - fanSpread / 2 + (fanSpread * leafIndex) / (leafCount - 1);
+        leafCount === 1
+          ? branchAngle
+          : branchAngle - fanSpread / 2 + (fanSpread * leafIndex) / (leafCount - 1);
       const leafPos = {
         x: branchPos.x + Math.cos(leafAngle) * leafRadius,
         y: branchPos.y + Math.sin(leafAngle) * leafRadius,
       };
       const leafId = `${branchId}-leaf-${leafIndex}`;
-      nodes.push({ id: leafId, type: "leaf", position: leafPos, data: { label: leaf.label, branchId } });
+      nodes.push({
+        id: leafId,
+        type: "leaf",
+        position: leafPos,
+        data: { label: leaf.label, branchId },
+      });
       edges.push(buildEdge(branchId, leafId, branchPos, leafPos, branchId));
     });
   });
@@ -200,7 +227,10 @@ function MindmapGraph({ content }: { content: StudioMindmapContent }) {
   const { fitView } = useReactFlow();
   const [collapsedBranchIds, setCollapsedBranchIds] = useState<Set<string>>(() => new Set());
 
-  const { nodes: baseNodes, edges: baseEdges } = useMemo(() => buildMindmapGraph(content), [content]);
+  const { nodes: baseNodes, edges: baseEdges } = useMemo(
+    () => buildMindmapGraph(content),
+    [content]
+  );
 
   const visibleNodes = useMemo(
     () =>
@@ -215,7 +245,11 @@ function MindmapGraph({ content }: { content: StudioMindmapContent }) {
   );
 
   const visibleEdges = useMemo(
-    () => baseEdges.filter((edge) => !edge.data || !collapsedBranchIds.has((edge.data as { branchId?: string }).branchId ?? "")),
+    () =>
+      baseEdges.filter(
+        (edge) =>
+          !edge.data || !collapsedBranchIds.has((edge.data as { branchId?: string }).branchId ?? "")
+      ),
     [baseEdges, collapsedBranchIds]
   );
 
@@ -259,7 +293,12 @@ function MindmapGraph({ content }: { content: StudioMindmapContent }) {
       <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
       <Controls showInteractive={false} />
       {totalNodeCount > 15 && (
-        <MiniMap pannable zoomable nodeColor="hsl(var(--primary))" maskColor="hsl(var(--muted) / 0.6)" />
+        <MiniMap
+          pannable
+          zoomable
+          nodeColor="hsl(var(--primary))"
+          maskColor="hsl(var(--muted) / 0.6)"
+        />
       )}
     </ReactFlow>
   );

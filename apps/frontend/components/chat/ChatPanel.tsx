@@ -89,7 +89,8 @@ export function ChatPanel({ notebookId }: { notebookId: string }) {
       <div ref={scrollContainerRef} className="flex-1 space-y-4 overflow-y-auto px-6 py-4">
         {messages.length === 0 && (
           <p className="text-sm text-muted-foreground">
-            Stelle eine Frage zu den hochgeladenen Quellen. Antworten sind ausschließlich quellenbasiert.
+            Stelle eine Frage zu den hochgeladenen Quellen. Antworten sind ausschließlich
+            quellenbasiert.
           </p>
         )}
         {messages.map((message, index) => (
@@ -104,7 +105,9 @@ export function ChatPanel({ notebookId }: { notebookId: string }) {
           />
         ))}
         {sending && (
-          <p className="text-xs text-muted-foreground">Antwort wird generiert… ({sendingElapsedSeconds}s)</p>
+          <p className="text-xs text-muted-foreground">
+            Antwort wird generiert… ({sendingElapsedSeconds}s)
+          </p>
         )}
         {error && <p className="text-xs text-red-600">{error}</p>}
       </div>

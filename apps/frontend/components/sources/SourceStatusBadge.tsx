@@ -10,14 +10,15 @@ const LABELS: Record<SourceStatus, string> = {
   deleted: "Gelöscht",
 };
 
-const VARIANTS: Record<SourceStatus, "default" | "success" | "warning" | "destructive" | "muted"> = {
-  uploaded: "muted",
-  processing: "warning",
-  indexed: "success",
-  failed: "destructive",
-  no_content: "destructive",
-  deleted: "muted",
-};
+const VARIANTS: Record<SourceStatus, "default" | "success" | "warning" | "destructive" | "muted"> =
+  {
+    uploaded: "muted",
+    processing: "warning",
+    indexed: "success",
+    failed: "destructive",
+    no_content: "destructive",
+    deleted: "muted",
+  };
 
 export function SourceStatusBadge({ status }: { status: SourceStatus }) {
   return <Badge variant={VARIANTS[status]}>{LABELS[status]}</Badge>;
