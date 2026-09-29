@@ -5,7 +5,7 @@
 COMPOSE := docker compose
 
 help:
-	@echo "NotebookLM Clone - Makefile targets"
+	@echo "NotebookLMC - Makefile targets"
 	@echo "  make env                    Copy .env.example to .env (if missing)"
 	@echo "  make up                     Build and start the full stack"
 	@echo "  make down                   Stop the stack"
