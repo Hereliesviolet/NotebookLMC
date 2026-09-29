@@ -1,10 +1,11 @@
 name: pytest
 
-# Baut die api- und worker-Images 1:1 wie in Produktion (docker-compose.yml)
-# und fuehrt pytest darin aus, statt die Abhaengigkeiten auf dem bloßen
-# Runner zu installieren - so sind Systembibliotheken wie libcairo2/pango
-# (WeasyPrint/cairosvg, siehe apps/api/Dockerfile) automatisch vorhanden und
-# es gibt keine Python-/Paketversions-Abweichung zum echten Deployment.
+# Builds the api and worker images exactly as docker-compose.yml does and runs
+# pytest inside them, instead of installing the dependencies on the bare
+# runner. That way system libraries such as libcairo2/pango (WeasyPrint and
+# cairosvg, see apps/api/Dockerfile) are present and there is no Python or
+# package version drift against the real deployment.
+# Lint and formatting checks live in lint.yml, frontend checks in frontend.yml.
 
 on:
   push:
@@ -20,31 +21,12 @@ on:
       - ".github/workflows/pytest.yml"
 
 jobs:
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install ruff
-        run: pip install ruff
-
-      - name: Run ruff check (api)
-        run: ruff check apps/api
-
-      - name: Run ruff check (worker)
-        run: ruff check apps/worker
-
   api-tests:
     runs-on: ubuntu-latest
-    # Die neuen Auth-Endpoint-Tests (tests/test_auth_endpoints.py, Block 7 der
-    # Session-Auth-Migration) brauchen eine echte Postgres+Redis-Instanz -
-    # kein Mocking bei echten Endpoint-Tests. Als Service-Container statt im
-    # docker-run-Image selbst, damit sie unabhaengig vom api-Image-Build
-    # bereitstehen.
+    # The auth endpoint tests (tests/test_auth_endpoints.py) need a real
+    # Postgres and Redis. They run as service containers rather than inside
+    # the docker-run image so they are available independently of the api
+    # image build.
     services:
       postgres:
         image: postgres:16
@@ -74,15 +56,14 @@ jobs:
       - name: Build api image
         run: docker build -t notebooklmc-api-ci apps/api
 
-      # LANGDOCK_PRIMARY_MODEL/LANGDOCK_FAST_MODEL muessen nur nicht-leer sein
-      # (Tests mocken den eigentlichen Anthropic/OpenAI-Client) - kein echter
-      # LANGDOCK_API_KEY notwendig, da keine reale Netzwerkanfrage erfolgt.
+      # LANGDOCK_PRIMARY_MODEL and LANGDOCK_FAST_MODEL only have to be
+      # non-empty: the tests mock the Anthropic/OpenAI clients, so no real
+      # LANGDOCK_API_KEY is needed and no network request is made.
       #
-      # --network host: die Service-Container obenstehend veroeffentlichen
-      # ihre Ports auf dem Runner-Host (localhost:5432/6379) - das gebaute
-      # api-Image laeuft hier bewusst NICHT im default Docker-Compose-Netzwerk
-      # (das existiert in CI gar nicht), sondern direkt im Netzwerk-Namespace
-      # des Runners, um diese Ports darüber zu erreichen.
+      # --network host: the service containers above publish their ports on
+      # the runner host (localhost:5432/6379). The freshly built api image
+      # runs in the runner's network namespace to reach them, since there is
+      # no docker compose network in CI.
       - name: Run alembic migrations against the test database
         run: |
           docker run --rm --network host \
