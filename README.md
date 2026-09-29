@@ -1,16 +1,16 @@
 # NotebookLMC
 
-[![pytest](https://github.com/Hereliesviolet/notebooklmc/actions/workflows/pytest.yml/badge.svg)](https://github.com/Hereliesviolet/notebooklmc/actions/workflows/pytest.yml)
+[![pytest](https://github.com/Hereliesviolet/NotebookLMC/actions/workflows/pytest.yml/badge.svg)](https://github.com/Hereliesviolet/NotebookLMC/actions/workflows/pytest.yml)
+[![lint](https://github.com/Hereliesviolet/NotebookLMC/actions/workflows/lint.yml/badge.svg)](https://github.com/Hereliesviolet/NotebookLMC/actions/workflows/lint.yml)
+[![frontend](https://github.com/Hereliesviolet/NotebookLMC/actions/workflows/frontend.yml/badge.svg)](https://github.com/Hereliesviolet/NotebookLMC/actions/workflows/frontend.yml)
 
-A self-hosted NotebookLM-style workspace: upload documents into notebooks, chat with them, and generate summaries, FAQs, quizzes and mind maps, with citations that are validated against your own database before they are shown.
-
-> **TODO:** screenshot / GIF of the notebook view. Not added yet.
+A self-hosted, NotebookLM-style application: upload documents into notebooks, ask questions about them, and generate summaries, FAQs, quizzes and mind maps. Chat answers cite chunks of the uploaded sources, and the API checks each citation against the notebook's chunks in the database before returning it. Not affiliated with Google.
 
 ## Features
 
 - Notebooks with source upload for PDF, DOCX, TXT, Markdown, HTML, CSV and XLSX (50 MB per file by default).
 - Background processing in a worker: parsing, section-based chunking, embeddings, indexing into Qdrant. Job status is tracked in Postgres. Scanned PDFs without a text layer fall back to vision-model OCR.
-- Chat restricted to the notebook's sources. The model has to cite chunks; the API drops citations that do not exist in the notebook and lowers the confidence to `low` when none survive. Retrieval guarantees that a large source does not crowd out the others.
+- Chat restricted to the notebook's sources. The model has to cite chunks; the API drops citations that do not exist in the notebook and lowers the confidence to `low` when none survive. Context assembly takes the best chunks of every source first (round-robin, up to `CONTEXT_MAX_CHUNKS_PER_SOURCE` per source) and fills the remaining slots by score, so one large source does not take the whole context.
 - Studio: summary, FAQ, timeline, briefing, quiz, mind map and infographic, generated from the notebook's indexed sources and exportable to Word and PDF (mind map also to PNG).
 - Notes per notebook.
 - Login with Argon2 password hashes, server-side sessions in Redis, CSRF protection and rate limits on login and registration.

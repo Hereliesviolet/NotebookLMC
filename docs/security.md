@@ -34,9 +34,13 @@ and both cookies.
   no account exists yet)
 
 The IP is `request.client.host`. Nothing in the repository configures trusted
-proxy headers, so behind Caddy this is most likely the proxy's address and all
-clients would share one counter. This has not been verified against a running
-deployment.
+proxy headers: Gunicorn is started without `--forwarded-allow-ips`, whose
+default only trusts `127.0.0.1`, so behind the Caddy container this is most
+likely the proxy's address and all clients share one counter. This has not
+been verified against a running deployment. It is not fixed in code because
+trusting `X-Forwarded-For` is only safe when the API is reachable exclusively
+through the proxy; with `BIND_ADDRESS=0.0.0.0` a client could spoof the header
+and bypass the limit. A fix needs an explicit trusted-proxy setting.
 
 **Roles and sharing.** There is no sharing between users.
 `notebooks/service.py::assert_can_access()` only compares the notebook's
