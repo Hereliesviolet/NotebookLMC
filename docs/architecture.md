@@ -1,6 +1,6 @@
-# Architektur
+# Architecture
 
-## 1. Zielarchitektur
+## Overview
 
 ```mermaid
 flowchart TB
@@ -11,7 +11,7 @@ flowchart TB
     Browser -->|"Login/Session-Cookie"| API
     API --> Postgres["PostgreSQL (Source of Truth)"]
     API --> Redis["Redis (Queue + Sessions + Rate-Limit)"]
-    API --> MinIO["MinIO (Files/Artefakte)"]
+    API --> MinIO["MinIO (Files)"]
     API --> Qdrant["Qdrant (Vectors)"]
     API --> Langdock["Langdock Gateway"]
     Redis --> Worker["Python Worker"]
@@ -24,201 +24,172 @@ flowchart TB
     Langdock --> Embeddings["OpenAI Embeddings (ada-002)"]
 ```
 
-> **Caddy-Deployment:** Im Standardfall startet das Projekt einen eigenen `caddy`-Container. Auf Hosts, auf denen Port 80/443 bereits von einem anderen Caddy-Container belegt ist, kann der eigene Service durch einen geteilten Caddy ersetzt werden – siehe [`docs/deployment.md`](deployment.md), Abschnitt „Deployment mit geteiltem Caddy".
+No service talks to OpenAI, Anthropic or any other model provider directly.
+Every model call goes through Langdock, see [langdock.md](langdock.md).
 
-Kein Service in diesem Projekt spricht direkt mit OpenAI, Anthropic oder
-einem anderen Modell-Provider. Jeder KI-Aufruf läuft ausschließlich über
-Langdock (Details: [`docs/langdock.md`](langdock.md)).
+With the default Compose file the project starts its own `caddy` container. On
+a host where ports 80/443 are already taken by another Caddy, the shared-Caddy
+overlay replaces it, see [deployment.md](deployment.md).
 
-## 2. Komponenten
+## Components
 
-| Komponente | Technologie | Verantwortung |
+| Component | Technology | Responsibility |
 | --- | --- | --- |
-| Frontend | Next.js 15 (App Router), TypeScript, Tailwind CSS | Notebook-Übersicht/-Detail, Upload-UI, Chat-UI mit Quellenkarten, Studio (7 Artefakt-Typen: Zusammenfassung, FAQ, Timeline, Briefing, Quiz, Mindmap, Infografik), Notizen, Login/Registrierung |
-| API | FastAPI, SQLAlchemy (async, asyncpg), Alembic | REST-API, Auth, RAG-Orchestrierung, Citation Validation, Langdock-Client |
-| Worker | Python, RQ (Redis-Queue) | Parsing, Chunking, Embeddings, Qdrant-Indexierung, Jobstatus |
-| PostgreSQL | - | Relationale Source of Truth (Notebooks, Sources, Chunks, Messages, Jobs, ...) |
-| Qdrant | - | Vektor-Suche über Chunk-Embeddings |
-| MinIO | - | Objektspeicher für Originaldateien und extrahierte Artefakte |
-| Redis | - | Job-Queue (RQ) für den Worker |
-| Caddy | - | Reverse Proxy, HTTPS-Terminierung |
+| Frontend | Next.js 15 (App Router), React 19, TypeScript, Tailwind CSS | Notebook list and detail page, upload, chat with citation cards, studio (seven artifact types), notes, login and registration |
+| API | FastAPI, SQLAlchemy 2 (async, asyncpg), Alembic | REST API, auth, RAG orchestration, citation validation, Langdock client, studio generation and export |
+| Worker | Python, RQ | Parsing, chunking, embeddings, Qdrant indexing, job status |
+| PostgreSQL | - | Relational source of truth (users, notebooks, sources, chunks, messages, ...) |
+| Qdrant | - | Vector search over chunk embeddings |
+| MinIO | - | Object storage for the uploaded original files |
+| Redis | - | RQ job queue, server-side sessions, rate-limit counters |
+| Caddy | - | Reverse proxy, TLS termination |
 
-## 3. Ordnerstruktur
+## API
 
-```text
-NotebookLMC/
-├── apps/
-│   ├── frontend/
-│   ├── api/
-│   └── worker/
-├── packages/
-│   ├── prompts/
-│   ├── shared-types/
-│   └── evals/
-├── infra/
-│   ├── caddy/
-│   ├── backup/
-│   └── scripts/
-├── docs/
-├── docker-compose.yml
-├── .env.example
-├── README.md
-└── Makefile
-```
+All routes live under `/api`. Apart from `/api/health`, `/api/auth/register`,
+`/api/auth/login` and `/api/auth/logout`, a route requires a valid session
+cookie, and every notebook operation checks that the caller owns the notebook.
 
-## 4. Backend-Architektur (FastAPI)
+| Area | Routes |
+| --- | --- |
+| Health | `GET /api/health` |
+| Auth | `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me` |
+| Notebooks | `GET/POST /api/notebooks`, `GET/PATCH/DELETE /api/notebooks/{id}` |
+| Sources | `GET /api/notebooks/{id}/sources`, `POST /api/notebooks/{id}/sources/upload`, `GET/DELETE /api/sources/{id}`, `POST /api/sources/{id}/reprocess` |
+| Chat | `GET /api/notebooks/{id}/messages`, `POST /api/notebooks/{id}/chat` |
+| Notes | `GET/POST /api/notebooks/{id}/notes`, `PATCH/DELETE /api/notes/{id}` |
+| Studio | `POST /api/notebooks/{id}/studio/{summary,faq,timeline,briefing,quiz,mindmap,infographic}` generates an artifact, `GET /api/notebooks/{id}/studio/{type}` reads the stored one, `GET /api/notebooks/{id}/studio/{type}/export?format=docx\|pdf\|png` exports it (png only for the mindmap). `POST .../studio/audio-script` returns 501. |
+
+The interactive OpenAPI documentation is served at `/docs` on the API port.
+
+## Backend layout
 
 ```text
 apps/api/app/
-├── main.py                 FastAPI App, Router-Registrierung, CORS, Startup (Qdrant/MinIO ensure)
-├── core/                    config.py, security.py (Argon2-Hashing, get_current_user),
-│                            sessions.py (Redis-Sessions, Sliding-TTL), rate_limit.py
-│                            (Fixed-Window-Limiter für /api/auth/login),
-│                            middleware.py (CsrfMiddleware), logging.py, deps.py
-├── db/                      base.py, session.py, models.py (10 Tabellen)
-├── schemas/                 Pydantic-Schemas je Domäne
-├── auth/, notebooks/, sources/, notes/, chat/, studio/   Router + Service je Domäne
-├── rag/                     retrieval.py, context_assembly.py, citation_validation.py, query_understanding.py
-├── langdock/                 client.py, model_router.py, prompts_loader.py
-├── qdrant/                   client.py (Collection-Setup, Search)
-├── storage/                  minio_client.py
-├── jobs/                     queue.py (RQ enqueue-Helper)
-└── alembic/                  Migrationen
+├── main.py            FastAPI app, routers, CORS, startup (ensure MinIO bucket and Qdrant collection)
+├── core/              config, security (Argon2, get_current_user), sessions (Redis),
+│                      rate_limit, middleware (CSRF, Private Network Access), logging, deps
+├── db/                base, session, models (10 tables)
+├── schemas/           Pydantic schemas per domain
+├── auth/ notebooks/ sources/ notes/ chat/ studio/    router and service per domain
+├── rag/               retrieval, context_assembly, citation_validation, query_understanding
+├── langdock/          client, prompts_loader
+├── qdrant/            collection setup, delete by source
+├── storage/           MinIO wrapper
+├── jobs/              RQ enqueue helper
+└── scripts/           seed_demo
+apps/api/alembic/      migrations (six revisions)
 ```
 
-**Auth:** Echte E-Mail/Passwort-Anmeldung mit Argon2-Passwort-Hashing und
-serverseitigen Redis-Sessions (`httpOnly`-Cookie `session_id` + CSRF-Cookie
-`csrf_token`, Double-Submit-Cookie-Schutz via `CsrfMiddleware`). Kein Token
-im Response-Body mehr. `get_current_user` validiert ausschließlich die
-Session aus dem Cookie - Details siehe [`docs/security.md`](security.md).
+**Auth.** E-mail and password login with Argon2 hashes and server-side Redis
+sessions: an `httpOnly` cookie `session_id` plus a readable `csrf_token` cookie
+for double-submit CSRF protection. There is no token in the response body.
+Details in [security.md](security.md).
 
-## 5. Frontend-Architektur (Next.js)
+## Frontend layout
 
 ```text
 apps/frontend/
-├── app/                 layout.tsx, page.tsx (Notebook-Übersicht),
-│                        notebooks/[id]/page.tsx (3-Spalten-Detail),
-│                        login/, register/,
-│                        api/[...path]/route.ts (Next.js-Route-Handler-Proxy zu api:8000)
-├── components/
-│   ├── notebooks/       NotebookCard, CreateNotebookDialog
-│   ├── sources/         SourceList, SourceCard, UploadDropzone, SourceStatusBadge
-│   ├── chat/            ChatPanel, MessageBubble, CitationCard, FollowUpChips
-│   ├── studio/          StudioPanel, StudioFullscreenOverlay,
-│   │                    StudioFaqView, StudioTimelineView, StudioBriefingView,
-│   │                    StudioQuizView, StudioMindmapView, StudioInfographicView
-│   │                    (je Typ Export-Buttons für Word/PDF, Mindmap zusätzlich PNG)
-│   ├── notes/           NotesPanel
-│   ├── layout/          Sidebar (inkl. Logout), AuthGate (Session-Check + Redirect zu /login)
-│   └── ui/              Button, Card, Badge, Input, Textarea, Dialog (shadcn/ui-inspiriert)
-└── lib/                 api-client.ts, types.ts (Mirror von packages/shared-types)
+├── app/         layout, notebook list, notebooks/[id] (three-column detail page),
+│                login, register, api/[...path]/route.ts (server-side proxy to the API)
+├── components/  notebooks, sources, chat, studio (one view per artifact type),
+│                notes, layout (Sidebar, AuthGate), ui (small shadcn-style primitives)
+└── lib/         api-client.ts, types.ts (hand-maintained mirror of the API schemas)
 ```
 
-Die Notebook-Detailseite ist ein 3-Spalten-Layout: Quellen/Notizen (links),
-Chat (Mitte), Studio (rechts) - analog zum NotebookLM-Original.
+The detail page has three columns: sources and notes on the left, chat in the
+middle, studio on the right.
 
-## 6. Worker-Architektur
+## Worker layout
 
 ```text
 apps/worker/app/
-├── main.py                RQ-Entrypoint, Queues: embeddings, default
-├── jobs/process_source.py  Hauptjob: Parsing -> Chunking -> Embedding -> Qdrant -> Status-Update
-├── parsing/                pdf.py, docx.py, txt_md.py, html.py, csv_xlsx.py, registry.py
-├── chunking/chunker.py      Heading/Absatz-basiertes Chunking mit Sliding-Window für lange Abschnitte
-├── embeddings/langdock_embeddings.py   Batch-Embedding über Langdock
-├── indexing/qdrant_indexer.py           Vektor-Upsert mit Payload
-├── langdock/                 client.py, model_router.py, prompts_loader.py (gespiegelt von api)
-└── db/models.py               Gespiegelte SQLAlchemy-Modelle (ohne FKs, siehe unten)
+├── main.py                  RQ entrypoint, listens on the queues "embeddings" and "default"
+├── jobs/process_source.py   parse -> chunk -> embed -> index -> status update
+├── parsing/                 pdf, docx, txt_md, html, csv_xlsx, registry, sanitize
+├── chunking/chunker.py      section-based chunking, sliding window for long text
+├── embeddings/              batched embedding calls through Langdock
+├── indexing/                Qdrant upsert with payload
+├── langdock/                client, prompts_loader (mirrors the API copy)
+├── qdrant/  storage/        clients (mirror the API copies)
+└── db/                      mirrored SQLAlchemy models
 ```
 
-**Hinweis Code-Sharing:** `LangdockClient`, Qdrant-/MinIO-Clients und die
-SQLAlchemy-Modelle sind zwischen `api` und `worker` bewusst dupliziert
-(leichtgewichtig, je ~100-200 Zeilen) statt über ein gemeinsames
-Python-Package geteilt, da die vorgegebene `packages/`-Struktur kein
-Python-Shared-Lib vorsieht und beide Services unabhängig deploybar bleiben
-sollen. Die Worker-Modelle deklarieren bewusst **keine** `ForeignKey`s auf
-`notebooks`/`users` (die im Worker-Metadata nicht existieren) - referenzielle
-Integrität wird ausschließlich über die vom `api`-Service verwalteten
-Alembic-Migrationen in Postgres sichergestellt.
+**Duplicated code.** `LangdockClient`, the Qdrant and MinIO wrappers and the
+SQLAlchemy models exist once in `api` and once in `worker`. This is deliberate:
+the copies are small, the two services stay independently deployable, and
+there is no shared Python package to version. The cost is that a change has to
+be made twice. The worker models declare no foreign keys; referential
+integrity comes from the Alembic migrations, which only the API runs.
 
-## 7. Datenbankmodell
+## Data model
 
-9 Tabellen, UUID-Primärschlüssel: `users`, `notebooks`, `sources`, `chunks`,
-`messages`, `notes`, `jobs`, `audit_events`, `langdock_requests`.
-Migrationen liegen unter `apps/api/alembic/versions/`, Ausführung
-ausschließlich über den `api`-Service (`make migrate`).
+Ten tables with UUID primary keys: `users`, `notebooks`, `sources`, `chunks`,
+`messages`, `notes`, `jobs`, `studio_artifacts`, `langdock_requests` and
+`audit_events`. `audit_events` exists in the schema but nothing writes to it
+yet. `langdock_requests` is written for chat answers only (model, latency,
+token counts, no prompt or answer text).
 
-## 8. Qdrant Collection Design
+`studio_artifacts` holds at most one row per `(notebook_id, type)`;
+regenerating an artifact overwrites it.
 
-- Collection: `notebook_chunks`
-- Vector Size: `1536` (text-embedding-ada-002)
-- Distance: Cosine
+Migrations are run by the API service only (`make migrate`); the worker never
+issues DDL.
+
+## Qdrant
+
+- Collection `notebook_chunks`, 1536 dimensions, cosine distance.
 - Payload: `notebook_id`, `source_id`, `chunk_id`, `document_name`,
-  `page_start`, `page_end`, `heading`, `chunk_type`, `created_at`
-- Payload-Indizes auf `notebook_id` und `source_id` für schnelle gefilterte Suche
-- Collection-Erstellung ist idempotent und läuft beim Start von `api` und `worker`
+  `page_start`, `page_end`, `heading`, `chunk_type`, `created_at`. The chunk
+  text itself is not stored in Qdrant, it is loaded from Postgres.
+- Keyword payload indexes on `notebook_id` and `source_id`.
+- The collection is created idempotently on startup of `api`, and again by the
+  worker as a safety net.
 
-## 9. MinIO Storage-Konzept
+## MinIO
 
-Bucket `notebook-files`, Pfadschema:
+Bucket `notebook-files`, created by the `minio-init` Compose service and by
+the API at startup, with anonymous access disabled. Originals are stored as
+`{notebook_id}/{source_id}/original/{filename}`.
 
-```text
-notebook-files/
-├── {notebook_id}/{source_id}/original/{filename}
-└── {notebook_id}/{source_id}/extracted/text.txt   (für spätere Erweiterungen vorgesehen)
-```
+## Queue
 
-Kein öffentlicher Bucket-Zugriff; Downloads laufen über signierte URLs
-(`get_presigned_download_url`).
+Redis holds the RQ queues. The API creates a row in `jobs` and enqueues
+`process_source` on the `default` queue. The worker listens on `embeddings`
+and `default`, but nothing is enqueued on `embeddings` today: the whole
+pipeline for one source runs as a single job. Job status lives in Postgres,
+Redis is only the queue mechanism.
 
-## 10. Redis Queue-Konzept
+## Status and limitations
 
-Zwei RQ-Queues: `default` (Parsing/Chunking/Indexierung) und `embeddings`
-(separat für Langdock-Embedding-Calls, damit deren Concurrency unabhängig
-steuerbar ist, siehe `WORKER_EMBEDDING_CONCURRENCY`). Jobstatus wird
-zusätzlich in der Postgres-Tabelle `jobs` persistiert - Redis ist nur die
-Queue-Mechanik, nicht die Status-Wahrheit.
+Implemented:
 
-## 11. Implementierungsstand und Roadmap
+- Notebook, upload, parse, chunk, embed, index, chat with citation validation.
+- Registration, login, logout, server-side sessions, CSRF protection, rate
+  limits on login and registration.
+- Seven studio artifact types with Word and PDF export, plus PNG for the
+  mindmap. Notes with full CRUD.
+- Scanned PDFs without a text layer go through a vision-model OCR fallback in
+  the worker.
 
-**Vollständig implementiert:**
+Not implemented:
 
-- **Kernflow:** Notebook → Upload → Parsing → Chunking → Embedding → Qdrant-Indexierung → Chat mit Citation Validation
-- **Auth:** E-Mail/Passwort-Registrierung und Login (`/api/auth/register`, `/api/auth/login`, `/api/auth/logout`, `/api/auth/me`), serverseitige Redis-Sessions (httpOnly-Cookie `session_id`), CSRF-Double-Submit-Cookie-Schutz (`CsrfMiddleware`), Rate-Limiting auf Login (Redis-Fixed-Window, 5/min/IP+E-Mail) und Register (Redis-Fixed-Window, 5/5min/IP)
-- **Studio (7 Artefakt-Typen):** Zusammenfassung, FAQ, Timeline, Briefing, Quiz, Mindmap, Infografik – jeweils mit Word- und PDF-Export; Mindmap zusätzlich mit PNG-Export (SVG → cairosvg). Audio/Podcast-Script bleibt bewusst `501 Not Implemented` (Scope-Entscheidung, siehe ursprüngliche Spec in `notebooklm clone.md`)
-- **Notizen:** Vollständiges CRUD (`apps/api/app/notes/router.py`, `apps/frontend/components/notes/NotesPanel.tsx`)
+- Password reset and e-mail verification. A forgotten password needs a manual
+  database change.
+- Sharing a notebook between users. Access checks only compare `owner_id`.
+- Reranking. `RERANKER_*` settings exist but no code reads them.
+- Streaming chat responses. `LangdockClient.stream()` exists but is not used by
+  the chat endpoint, which returns one validated JSON response.
+- The audio-script studio type (501).
+- Use of the `embeddings` queue and of `WORKER_*_CONCURRENCY`.
+- Docling or Unstructured based parsing. Parsing uses `pypdf`, `python-docx`,
+  `pandas` and `beautifulsoup4` to keep the images small.
+- A download endpoint for the original files.
 
-**Offene Punkte (Roadmap):**
+Known trade-offs:
 
-- Kein Passwort-Reset-Flow (E-Mail-Versand nicht implementiert); vergessene Passwörter erfordern aktuell einen manuellen DB-Eingriff
-- Keine E-Mail-Verifizierung bei der Registrierung
-- Kein Notebook-Sharing zwischen mehreren Usern – `assert_can_access()` prüft ausschließlich Besitzerschaft (`owner_id`)
-- Haiku-Reranking (`RERANKER_ENABLED`) ist konfigurierbar vorbereitet, aber nicht aktiv genutzt
-- Streaming-Antworten (`LangdockClient.stream()`) sind vorbereitet, aber nicht im Chat-Endpoint aktiv
-- Docling/Unstructured-basiertes Parsing für gescannte PDFs (aktuell: Vision-OCR-Fallback im Worker)
-
-## 12. Risiken und offene Punkte
-
-- **Langdock-Modell-IDs:** `LANGDOCK_PRIMARY_MODEL`/`LANGDOCK_FAST_MODEL` sind
-  in `.env.example` mit Beispiel-/Default-Werten aus einem konkreten
-  Langdock-Workspace vorbelegt, sind aber workspace-/regionsabhängig – siehe
-  [`docs/langdock.md`](langdock.md) zur Ermittlung der für den eigenen
-  Workspace gültigen IDs. Der Code liest diese IDs ausschließlich aus der
-  Konfiguration, niemals hartkodiert.
-- **Parsing-Qualität:** Bewusst schlanke Libraries (`pypdf`, `python-docx`,
-  `pandas`, `beautifulsoup4`) statt Docling/Unstructured, um Docker-Images
-  klein zu halten. Gescannte PDFs ohne Text-Layer werden über einen
-  Vision-OCR-Fallback verarbeitet (im Worker-Log als
-  `falling back to Vision OCR` sichtbar).
-- **Kein TLS im lokalen Setup:** Caddy läuft lokal ohne echte
-  Domain/Zertifikat. Für Produktion (echte Domain, TLS) siehe
-  [`docs/deployment.md`](deployment.md); für Auth-Sicherheitsdetails
-  [`docs/security.md`](security.md).
-- **Frontend-Abhängigkeiten:** Next.js `15.5.20`, React `19.2.7`. `npm audit`
-  meldet 0 vulnerabilities (nach dem Next.js 14→15 + React 18→19
-  Major-Upgrade, Juli 2026 – Details in [`docs/dependabot-notes.md`](dependabot-notes.md)).
-- **Rate-Limiting:** Gilt für `/api/auth/login` (Redis-Fixed-Window,
-  5/min/IP+E-Mail) und `/api/auth/register` (Redis-Fixed-Window, 5/5min/IP).
-- **Bekannte fehlende Auth-Features:** Kein Passwort-Reset-Flow, keine
-  E-Mail-Verifizierung, kein Notebook-Sharing (nur Besitzerschaft geprüft) –
-  Details in [`docs/security.md`](security.md).
+- Langdock model ids depend on the workspace and region. The defaults in
+  `.env.example` come from one workspace, see [langdock.md](langdock.md).
+- Locally Caddy serves plain HTTP. For TLS see [deployment.md](deployment.md).
+- Rate limits use fixed windows in Redis: login 5 per minute per IP and
+  e-mail, registration 5 per 5 minutes per IP.

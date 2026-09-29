@@ -1,184 +1,109 @@
-# Langdock-Integration
+# Langdock integration
 
-Langdock ist das **einzige** AI-Gateway dieses Projekts. Es gibt keinen
-Code-Pfad, der direkt mit OpenAI, Anthropic oder einem anderen
-Modell-Provider spricht - jeder Aufruf läuft über `LangdockClient`
-(`apps/api/app/langdock/client.py`, gespiegelt in `apps/worker/app/langdock/client.py`).
+Langdock is the only AI gateway of this project. No code path talks to OpenAI,
+Anthropic or another model provider directly; every call goes through
+`LangdockClient` (`apps/api/app/langdock/client.py`, mirrored in
+`apps/worker/app/langdock/client.py`).
 
-## Verwendete Endpunkte
+## Endpoints
 
-| Zweck | Endpunkt | Genutzt für |
+| Kind | Setting | Used for |
 | --- | --- | --- |
-| Anthropic-kompatibel | `LANGDOCK_ANTHROPIC_BASE_URL` (`https://api.langdock.com/anthropic/eu/v1`) | Claude Sonnet 4.6, Claude Haiku |
-| OpenAI-kompatibel | `EMBEDDING_BASE_URL` (`https://api.langdock.com/openai/eu/v1`) | Embeddings (`text-embedding-ada-002`) |
+| Anthropic-compatible | `LANGDOCK_ANTHROPIC_BASE_URL` (`https://api.langdock.com/anthropic/eu/v1`) | Claude Sonnet (answers, studio), Claude Haiku (intent, rewrite), Claude vision (OCR fallback in the worker) |
+| OpenAI-compatible | `EMBEDDING_BASE_URL` (`https://api.langdock.com/openai/eu/v1`) | Embeddings (`text-embedding-ada-002`) |
 
-Die Anbindung nutzt bewusst die offiziellen `anthropic`- und `openai`-Python-SDKs
-mit überschriebener `base_url`, da beide Endpunkte laut Projektvorgabe
-API-kompatibel zu den jeweiligen Original-APIs sind.
+The client uses the official `anthropic` and `openai` Python SDKs with an
+overridden `base_url`, because both Langdock endpoints are API-compatible with
+the originals.
 
-### Wichtig: `/v1`-Suffix von `LANGDOCK_ANTHROPIC_BASE_URL` und das Anthropic-SDK
+### The `/v1` suffix
 
-Langdock dokumentiert die Anthropic-kompatible Basis-URL inzwischen inklusive
-`/v1`-Suffix (`https://api.langdock.com/anthropic/<region>/v1`). Das offizielle
-`anthropic`-Python-SDK hängt bei **jedem** Messages-Call selbst fest
-`/v1/messages` an seine `base_url` an (siehe `anthropic._base_client`,
-Methode `_prepare_url`). Würde man die `/v1`-Basis-URL unverändert an
-`Anthropic(base_url=...)` durchreichen, landete der Call bei
-`.../v1/v1/messages` - das liefert bei Langdock nachweislich einen `404`.
+Langdock documents the Anthropic-compatible base URL with a `/v1` suffix. The
+`anthropic` SDK appends `/v1/messages` to its `base_url` on every call, so
+passing the URL unchanged would produce `.../v1/v1/messages`, which Langdock
+answers with a 404. `_anthropic_sdk_base_url()` in the client strips a trailing
+`/v1` before the URL is handed to the SDK. The variable can therefore be set
+the way Langdock documents it.
 
-`LangdockClient` (`apps/api/app/langdock/client.py`,
-`apps/worker/app/langdock/client.py`) entfernt daher intern in
-`_anthropic_sdk_base_url()` ein eventuell vorhandenes `/v1`-Suffix, bevor die
-`base_url` an das SDK übergeben wird. `LANGDOCK_ANTHROPIC_BASE_URL` kann damit
-so konfiguriert werden, wie Langdock es dokumentiert (mit `/v1`) - der Code
-kompensiert die SDK-Eigenheit automatisch. Gegen die echte Langdock-API
-verifiziert (mit und ohne `/v1`-Suffix in der env-Variable).
+## Model ids
 
-## Modell-IDs ermitteln
-
-`LANGDOCK_PRIMARY_MODEL` (Claude Sonnet 4.6) und `LANGDOCK_FAST_MODEL` (Claude
-Haiku) sind in `.env.example` mit den Beispiel-/Default-Werten aus dem
-Langdock-Workspace des Projekt-Betreibers vorbelegt:
+`LANGDOCK_PRIMARY_MODEL` (Claude Sonnet) and `LANGDOCK_FAST_MODEL` (Claude
+Haiku) default in `.env.example` to values from one Langdock workspace:
 
 ```env
 LANGDOCK_PRIMARY_MODEL=claude-sonnet-4-6-default
 LANGDOCK_FAST_MODEL=claude-haiku-4-5@20251001
 ```
 
-**Diese IDs sind nicht universell gültig** - Modell-Verfügbarkeit und
--Bezeichner hängen vom jeweiligen Langdock-Workspace und der Region ab.
-"4.6" ist ausschließlich der in diesem Projekt aktuell konfigurierte Stand,
-keine feste Vorgabe - ein anderer Workspace kann eine andere Sonnet-Version
-als aktuellstes/verfügbares Modell führen. Für einen anderen Workspace/eine
-andere Region die echten IDs selbst ermitteln:
+These ids are not universal. Availability and naming depend on the workspace
+and region, and "4.6" is just what this project is configured with. To find the
+ids of your workspace:
 
-1. Im Langdock-Dashboard unter API-Zugriff / Modelle nachsehen, oder
-2. Den Modell-Listen-Endpunkt der Langdock Agent API abfragen (Basis-URL:
-   `LANGDOCK_AGENT_BASE_URL`, siehe `.env.example`) und die gewünschten
-   Claude-Sonnet-/Claude-Haiku-Varianten heraussuchen, oder
-3. Testweise einen minimalen `messages.create()`-Call mit der vermuteten ID
-   gegen `LANGDOCK_ANTHROPIC_BASE_URL` ausführen - bei einer ungültigen ID
-   antwortet Langdock mit `400`/`404` und listet im Fehlertext meist die im
-   Workspace tatsächlich verfügbaren Modell-IDs auf.
+1. Look in the Langdock dashboard under API access / models, or
+2. query the model list of the Langdock Agent API (base URL
+   `LANGDOCK_AGENT_BASE_URL`), or
+3. send a minimal `messages.create()` call with a guessed id; on an invalid id
+   Langdock answers with 400 or 404 and usually lists the available ids in
+   the error text.
 
-Die ermittelten IDs kommen ausschließlich in die `.env`-Datei - niemals in
-den Code. `LangdockClient._model_for()` wirft einen klaren Fehler, wenn eine
-ID fehlt, statt eine falsche ID zu raten.
+Model ids belong in `.env`, never in code. `LangdockClient._model_for()` raises
+an explicit error if an id is missing instead of guessing one.
 
-## Claude Extended Thinking (`LANGDOCK_ENABLE_EXTENDED_THINKING`)
+## Extended thinking
 
-Optionales Feature, Default `false` (Verhalten bleibt dann unverändert).
-Steuert den `thinking`-Parameter der Anthropic Messages API für den
-finalen Sonnet-Aufruf (`LangdockClient.generate_sonnet()`):
-
-- `false` (Default): Sonnet wird wie bisher ohne `thinking`-Parameter
-  aufgerufen.
-- `true`: Der Aufruf enthält zusätzlich
-  `thinking={"type": "enabled", "budget_tokens": 4096}`. `max_tokens` wird
-  dafür intern automatisch um dieses Budget erhöht, da die Anthropic-API
-  verlangt, dass `max_tokens` strikt größer als `budget_tokens` ist. Die
-  Antwort enthält dann vor dem eigentlichen Text-Block zusätzlich einen
-  `thinking`-Content-Block; `LangdockClient` filtert beim Zusammensetzen der
-  Antwort ausschließlich auf Blöcke vom Typ `text` und überspringt den
-  `thinking`-Block automatisch.
-
-Voraussetzung ist ein `anthropic`-Python-SDK, das den `thinking`-Parameter
-unterstützt (ab ca. Version 0.49; das Projekt verwendet `anthropic==0.69.0`,
-siehe `apps/api/requirements.txt`/`apps/worker/requirements.txt`).
-
-Hinweis: Ob ein konkretes Modell den klassischen `budget_tokens`-Modus
-unterstützt oder eine neuere Adaptive-Thinking-Variante verlangt, hängt vom
-jeweiligen Modell/Provider-Stand ab - bei einer Ablehnung durch Langdock
-(`400`) die Fehlermeldung prüfen, bevor die ID/den Parameter änderst.
-
-## Model Router
-
-`apps/api/app/langdock/model_router.py` (`ModelRouter.select_model()`)
-entscheidet anhand des Task-Typs, welches Modell zum Einsatz kommt:
-
-- **Sonnet:** `final_answer`, `complex_summary`, `source_comparison`,
-  `contradiction_check`, `legal_reasoning`, `technical_reasoning`, `briefing`
-- **Haiku:** `intent_detection`, `query_rewrite`, `title_generation`,
-  `followup_questions`, `simple_summary`, `classification`, `reranking`
-- **Embedding:** `document_embedding`, `query_embedding` (nie Sonnet/Haiku)
+`LANGDOCK_ENABLE_EXTENDED_THINKING` only affects
+`LangdockClient.generate_sonnet()`. When true, that method sends
+`thinking={"type": "enabled", "budget_tokens": 4096}` and raises `max_tokens`
+by the budget, since the Anthropic API requires `max_tokens` to be larger than
+`budget_tokens`. The chat and studio flows call `tool_output()` and
+`generate_structured()`, not `generate_sonnet()`, so the flag currently has no
+effect on them. Whether a given model accepts the `budget_tokens` mode or needs
+a newer thinking variant depends on the model.
 
 ## Prompts
 
-Alle Prompt-Texte liegen zentral unter `packages/prompts/` und werden zur
-Laufzeit von `prompts_loader.py` geladen (kein Hardcoding im Python-Code):
+Prompt texts and tool schemas are files in `packages/prompts/`, loaded at run
+time by `prompts_loader.py`:
 
-- `system_final_answer.md` - System-Prompt für die finale Antwort
-- `output_schema.json` - JSON-Schema, das Sonnet einhalten muss
-- `haiku_intent_detection.md`, `haiku_query_rewrite.md`, `haiku_reranking.md`
+- `system_final_answer.md` and `final_answer_tool_schema.json` for chat answers
+  (`output_schema.json` documents the same response shape)
+- `haiku_intent_detection.md`, `haiku_query_rewrite.md`
+- `studio_<type>.md` and `studio_<type>_tool_schema.json` for each of the seven
+  studio artifact types
 
-Im Docker-Setup wird `packages/prompts` read-only in `api` und `worker`
-gemountet (siehe `docker-compose.yml`).
+With Docker, `packages/prompts` is mounted read-only into `api` and `worker`
+(see `docker-compose.yml`). Outside Docker, the loader finds the directory
+relative to the repository root, or takes `PROMPTS_DIR`.
 
-## Rate Limits, Retries, Kostenkontrolle
+## Retries and usage tracking
 
-- `LangdockClient` retried bei HTTP 429 automatisch mit dem in
-  `LANGDOCK_RETRY_BACKOFF_SECONDS` konfigurierten Backoff (Default:
-  `5,15,30,60` Sekunden).
-- Embedding-Aufrufe laufen im Worker über eine eigene Redis-Queue
-  (`embeddings`) mit separater, konfigurierbarer Concurrency
-  (`WORKER_EMBEDDING_CONCURRENCY`), damit große Uploads nicht die gesamte
-  Job-Verarbeitung blockieren.
-- Modell-Routing (Haiku für Utility-Tasks, Sonnet nur für die finale
-  Antwort/komplexe Analysen) reduziert Kosten strukturell.
-- `langdock_requests`-Tabelle protokolliert pro Sonnet-Aufruf Modell,
-  Latenz und Token-Verbrauch (best-effort, blockiert die Antwort nicht bei
-  Schreibfehlern) - Basis für spätere Kostenauswertung.
-- `LangdockClient.usage_export()` ist als Platzhalter für die optionale
-  Langdock Usage Export API vorbereitet (`LANGDOCK_USAGE_EXPORT_ENABLED`),
-  aber ohne bestätigten Request/Response-Contract noch nicht implementiert.
+- On HTTP 429, `LangdockClient` retries with the waits from
+  `LANGDOCK_RETRY_BACKOFF_SECONDS` (default `5,15,30,60`). The waits use
+  `asyncio.sleep` in the API, so they do not block the event loop.
+- `langdock_requests` stores model, latency and token counts for chat answers
+  (best effort: a failed write does not fail the answer). Studio calls and
+  embeddings are not recorded there.
+- `LangdockClient.usage_export()` is a placeholder for the Langdock Usage
+  Export API and is not implemented.
 
-## Prompt-Caching (`cache_control`, verifiziert unterstützt)
+## Prompt caching
 
-Anthropic Prompt-Caching (`cache_control: {"type": "ephemeral"}` auf einem
-Content-Block) läuft **durch Langdocks Anthropic-kompatible Gateway
-hindurch** - live gegen `LANGDOCK_ANTHROPIC_BASE_URL` verifiziert:
+Anthropic prompt caching (`cache_control: {"type": "ephemeral"}` on a content
+block) works through Langdock's Anthropic-compatible gateway. It was checked by
+hand against the live API: a large system block returned
+`cache_creation_input_tokens` on the first call and `cache_read_input_tokens`
+with the same number on the following calls. Langdock's published OpenAPI
+schema does not list `cache_control`, so this behaviour is observed, not
+documented.
 
-1. Erster Call mit einem großen (~18.400 Zeichen) `system`-Content-Block mit
-   `cache_control` -> Response-`usage` enthält
-   `"cache_creation_input_tokens": 6402, "cache_read_input_tokens": 0`.
-2. Zweiter/dritter Call mit demselben Block (wenige Sekunden später) ->
-   `"cache_creation_input_tokens": 0, "cache_read_input_tokens": 6402"` -
-   voller Cache-Hit.
+It is used for studio generation (`cache_user_message=True` in
+`studio/service.py`): the notebook-wide context is identical for all artifact
+types and retries of the same notebook until a source changes. It is not used
+for chat, because the retrieved context differs per question and a cache write
+costs about 25 percent more input tokens than a normal call.
 
-Das offizielle Langdock-OpenAPI-Schema (`docs.langdock.com` Anthropic
-Messages-Endpoint) dokumentiert `cache_control` zwar nicht explizit im
-Request-Content-Block-Schema (`RequestTextBlock` hat dort
-`additionalProperties: false` ohne `cache_control`-Property) und auch nicht
-in seinem `Usage`-Response-Schema - das Feld wird serverseitig aber
-offenbar unverändert an Anthropic durchgereicht und die Response gibt die
-echten Anthropic-Cache-Felder zurück, statt sie herauszufiltern oder den
-Request wegen des zusätzlichen Felds abzulehnen. Die Dokumentation ist hier
-also unvollständig/veraltet - die tatsächliche Unterstützung wurde deshalb
-empirisch verifiziert statt sich auf die Doku zu verlassen.
+## Streaming
 
-**Genutzt in `apps/api/app/studio/service.py`** (`_generate_and_validate()`,
-`cache_user_message=True`): der notebook-weite Kontext-Block
-(`build_notebook_wide_context()`) ist für alle Studio-Artefakttypen und
-Retries desselben Notebooks identisch, bis eine Quelle hinzugefügt/entfernt
-wird - ein klassischer Fall für einen wiederholt getroffenen Cache
-(TTL 5 Minuten für `ephemeral`). `LangdockClient._call_messages()`
-implementiert das generisch über den `cache_user_message`-Parameter
-(wickelt den kompletten `user_message`-String stattdessen als
-Content-Block-Array mit `cache_control` ein).
-
-**Bewusst nicht aktiviert in `apps/api/app/chat/service.py`**: der dortige
-Kontext-Block wird pro Chat-Frage aus dem RAG-Retrieval neu zusammengesetzt
-(andere Frage -> andere Embedding-Suche -> i.d.R. andere/anders sortierte
-Chunk-Auswahl) und ist damit fast nie byte-identisch zu einem vorherigen
-Call, selbst für Folgefragen im selben Notebook. Ein Cache-Write kostet
-~25% mehr Input-Tokens als ein normaler Call; ohne realistische
-Wiederholungsrate steht dem kein Cache-Hit gegenüber, der das aufwiegt -
-für den Chat-Pfad also aktuell kein Netto-Vorteil.
-
-## Streaming (vorbereitet, nicht aktiv genutzt)
-
-`LangdockClient.stream()` kapselt einen Streaming-Aufruf über die
-Anthropic-kompatible API. Der aktuelle Chat-Endpoint gibt eine einzelne,
-validierte JSON-Antwort zurück (nötig für die Citation Validation vor dem
-Ausliefern) - Streaming wäre ein sinnvoller nächster Schritt für die
-Chat-UX, ist aber nicht Teil des MVP.
+`LangdockClient.stream()` wraps a streaming call. The chat endpoint does not use
+it: it returns one validated JSON response, because citations are validated
+before anything is sent to the client.

@@ -1,166 +1,130 @@
 # Security
 
-## Auth
+This describes what the code does today, including the gaps. It is not a
+security audit.
 
-Echte E-Mail/Passwort-Authentifizierung mit serverseitigen Sessions - kein
-Dev-/Demo-Token mehr. Implementiert in `apps/api/app/core/security.py`
-(Passwort-Hashing, `get_current_user`), `apps/api/app/core/sessions.py`
-(Redis-Session-Store) und `apps/api/app/auth/router.py`
-(`/register`, `/login`, `/logout`, `/me`).
+## Authentication
 
-**Passwörter:** Argon2 (`argon2-cffi`, `PasswordHasher`) - der aktuell
-empfohlene Passwort-Hash-Algorithmus (Winner der Password Hashing
-Competition), inklusive automatischem Salt pro Hash. Mindestlänge
-`MIN_PASSWORD_LENGTH` (Default `10`, aus `.env`) statt erzwungener
-Zeichenklassen-Komplexität, gemäß aktueller NIST-800-63B-Empfehlung.
+E-mail and password login with server-side sessions. The code is in
+`apps/api/app/core/security.py` (hashing, `get_current_user`),
+`core/sessions.py` (Redis session store) and `auth/router.py` (`/register`,
+`/login`, `/logout`, `/me`).
 
-**Sessions:** `POST /api/auth/login` legt bei Erfolg eine Server-Session in
-Redis an (`session:<opaque-id>` → `user_id`, `SESSION_TTL_SECONDS`
-Sliding-TTL - jede erfolgreiche Prüfung verlängert die TTL) und setzt zwei
-Cookies:
+**Passwords.** Argon2 through `argon2-cffi` (`PasswordHasher`, salted per
+hash). The only rule is a minimum length, `MIN_PASSWORD_LENGTH` (default 10),
+in line with NIST 800-63B's advice against composition rules.
 
-- `session_id` - `httpOnly`, `Secure` (steuerbar über
-  `SESSION_COOKIE_SECURE`, siehe unten), `SameSite=Lax`. Der Browser schickt
-  dieses Cookie automatisch mit, JavaScript kann es nicht auslesen.
-- `csrf_token` - **nicht** `httpOnly` (siehe CSRF-Abschnitt unten), sonst
-  identische Attribute.
+**Sessions.** A successful `POST /api/auth/login` creates a Redis entry
+`session:<opaque id>` mapping to the user id, with a sliding TTL of
+`SESSION_TTL_SECONDS` (each successful check extends it). Two cookies are set:
 
-`get_current_user` liest ausschließlich `session_id` aus dem Cookie, schlägt
-in Redis nach und lädt den zugehörigen User aus Postgres. `POST
-/api/auth/logout` zerstört die Redis-Session und löscht beide Cookies.
+- `session_id`: `httpOnly`, `SameSite=Lax`, `Secure` if `SESSION_COOKIE_SECURE`
+  is true.
+- `csrf_token`: same attributes but readable by JavaScript, see CSRF below.
 
-**Rate-Limiting:** `apps/api/app/core/rate_limit.py` implementiert einen
-einfachen Redis-Fixed-Window-Zähler (`login_attempts:<ip>:<email>`, `INCR` +
-`EXPIRE 60`) - maximal 5 Login-Versuche pro Minute pro IP+E-Mail-Kombination,
-danach `429` mit `Retry-After`-Header. `POST /api/auth/register` hat ein
-analoges, aber separates Limit (`register_attempts:<ip>`, `INCR` +
-`EXPIRE 300`) - maximal 5 Registrierungen pro 5 Minuten **pro IP** (kein
-E-Mail-Anteil im Key, da zum Registrierungszeitpunkt noch kein Account
-existiert). Das längere Zeitfenster gegenüber Login trägt dem Umstand
-Rechnung, dass Registrierungen deutlich seltener sind als Login-Versuche.
-Bewusst kein zusätzliches Paket (z. B. `slowapi`), da nur diese zwei Zähler
-benötigt werden.
+`get_current_user` reads only the `session_id` cookie, looks it up in Redis and
+loads the user from Postgres. `POST /api/auth/logout` deletes the Redis entry
+and both cookies.
 
-**Rollen/Sharing:** Notebook-Sharing zwischen mehreren Usern ist nicht
-implementiert - `notebooks/service.py::assert_can_access()` prüft
-ausschließlich Besitzerschaft (`owner_id`).
+**Rate limiting.** `core/rate_limit.py` uses Redis fixed-window counters
+(`INCR` + `EXPIRE`) and returns 429 with a `Retry-After` header:
 
-**Lokale Entwicklung:** `make seed` legt einen Demo-User mit Passwort aus
-`DEV_DEMO_USER_PASSWORD` (`.env`) an - es gibt keinen automatischen
-Dev-Login mehr, auch lokal läuft jede Anmeldung über den echten
-Login-Screen (`/login`).
+- login: 5 attempts per 60 seconds per IP and e-mail combination
+- registration: 5 attempts per 300 seconds per IP (no e-mail in the key, since
+  no account exists yet)
 
-## CSRF-Schutz
+The IP is `request.client.host`. Nothing in the repository configures trusted
+proxy headers, so behind Caddy this is most likely the proxy's address and all
+clients would share one counter. This has not been verified against a running
+deployment.
 
-Da Auth jetzt über Cookies statt über einen `Authorization`-Header läuft,
-ist CSRF ein reales Risiko (Cookies werden vom Browser automatisch bei
-jedem Request an die Domain mitgeschickt, auch von fremden Seiten
-ausgelöst) - `CsrfMiddleware` (`apps/api/app/core/middleware.py`)
-implementiert das Double-Submit-Cookie-Pattern dagegen:
+**Roles and sharing.** There is no sharing between users.
+`notebooks/service.py::assert_can_access()` only compares the notebook's
+`owner_id` with the caller.
 
-- Bei `POST`/`PUT`/`PATCH`/`DELETE` **und** vorhandenem `session_id`-Cookie
-  muss der Request-Header `X-CSRF-Token` exakt dem Wert des `csrf_token`-
-  Cookies entsprechen, sonst `403`.
-- Ohne `session_id`-Cookie (z. B. `/login`, `/register` selbst) wird der
-  Check automatisch übersprungen - es gibt noch nichts zu schützen, da ein
-  Angreifer ohne gültige Session auf keinen echten Endpoint zugreifen kann.
-- Das Frontend liest `csrf_token` per JavaScript aus `document.cookie`
-  (`apps/frontend/lib/api-client.ts`) und spiegelt ihn bei jedem
-  mutierenden Request als Header zurück - ein Angreifer auf einer fremden
-  Domain kann dieses Cookie nicht auslesen (Same-Origin-Policy), sein
-  gefälschter Request hat also nie den korrekten Header-Wert.
+**Local development.** `make seed` creates the demo user from
+`DEV_DEMO_USER_*`. There is no automatic dev login.
 
-## Netzwerk-Exposition
+## CSRF
 
-- Von den Compose-Services darf **nur `caddy`** (Ports 80/443) öffentlich
-  erreichbar sein. `frontend`, `api`, `postgres`, `redis`, `qdrant` und
-  `minio` binden ihre Host-Port-Mappings in `docker-compose.yml` standardmäßig
-  an `${BIND_ADDRESS:-127.0.0.1}` statt an `0.0.0.0` - sie sind also nur vom
-  Host selbst (z. B. per SSH-Tunnel) erreichbar, nicht über die öffentliche
-  Netzwerkschnittstelle. `caddy` routet intern über das Docker-Netzwerk
-  (`api:8000`, `frontend:3000`, siehe `infra/caddy/Caddyfile`) und braucht
-  dafür keine Host-Port-Mappings der Zielservices.
-- Für lokale Entwicklung, bei der direkter externer Zugriff auf einen
-  einzelnen Service nötig ist, kann `BIND_ADDRESS=0.0.0.0` in `.env` gesetzt
-  werden (siehe `.env.example`). **Für Produktivbetrieb auf einem öffentlich
-  erreichbaren Host darf `BIND_ADDRESS` niemals auf `0.0.0.0` gesetzt werden**
-  - das exponiert API/Datenbank/Cache/Vektorstore/Objektspeicher ohne
-  Auth-Schutz direkt im Internet.
-- Hintergrund: Ein direkt exponierter Port ist ein reales Angriffsziel -
-  automatisierte Scanner senden dauerhaft generische Exploit-Payloads
-  (WordPress-Pfade, Path-Traversal, XSS, Kubernetes-API-Pfade usw.) gegen
-  jeden offenen Port, unabhängig davon, welche Anwendung tatsächlich dahinter
-  läuft.
+Cookie-based auth makes CSRF relevant. `CsrfMiddleware`
+(`core/middleware.py`) implements double-submit protection:
 
-## Transport-Sicherheit
+- For `POST`, `PUT`, `PATCH` and `DELETE` requests that carry a `session_id`
+  cookie, the `X-CSRF-Token` header must equal the `csrf_token` cookie, else
+  the API answers 403.
+- Requests without a `session_id` cookie skip the check; without a session
+  there is nothing to protect (this covers `/login` and `/register`).
+- The frontend reads the `csrf_token` cookie in `lib/api-client.ts` and sends
+  it as the header on every mutating request. A third-party site cannot read
+  the cookie, so a forged request lacks the matching header.
 
-- Lokal terminiert Caddy HTTP ohne Zertifikat (`infra/caddy/Caddyfile`,
-  `:80`-Block).
-- Für Produktion die auskommentierte Domain-Variante in der Caddyfile
-  aktivieren - Caddy holt dann automatisch ein Let's-Encrypt-Zertifikat und
-  erzwingt HTTPS.
-- Interner Verkehr (API ↔ Postgres/Redis/Qdrant/MinIO) läuft unverschlüsselt
-  im Docker-internen Netz, was für ein Single-Host-Deployment akzeptabel
-  ist. Bei einem Multi-Host-Setup sollte dieser Verkehr zusätzlich per
-  VPN/Overlay-Netzwerk abgesichert werden.
-- `SESSION_COOKIE_SECURE` (`.env`) **muss** auf `true` stehen, sobald die App
-  wirklich über HTTPS ausgeliefert wird (Produktion) - sonst schickt der
-  Browser das Session-Cookie theoretisch auch über eine ungesicherte
-  HTTP-Verbindung mit. Lokal über `http://localhost` **muss** der Wert
-  dagegen `false` sein, sonst verwirft der Browser das Cookie beim Setzen
-  komplett und der Login schlägt fehl (Cookies mit `Secure`-Attribut werden
-  nur über HTTPS akzeptiert).
+## Network exposure
+
+- Only `caddy` (80/443) is meant to be public. `frontend`, `api`, `postgres`,
+  `redis`, `qdrant` and `minio` publish their ports on
+  `${BIND_ADDRESS:-127.0.0.1}`, so they are reachable from the host only (for
+  example through an SSH tunnel). Caddy reaches `api:8000` and `frontend:3000`
+  over the Docker network.
+- `BIND_ADDRESS=0.0.0.0` is for local development only. On a publicly
+  reachable host it exposes the API, database, cache, vector store and object
+  store to the internet.
+
+## Transport
+
+- Locally, Caddy serves plain HTTP on `:80` (`infra/caddy/Caddyfile`).
+- For production, enable the commented domain block in the Caddyfile. Caddy
+  then obtains a Let's Encrypt certificate and redirects to HTTPS.
+- Traffic between the containers is unencrypted on the Docker network. That is
+  acceptable for one host; across hosts it needs a VPN or overlay network.
+- Set `SESSION_COOKIE_SECURE=true` when serving over HTTPS. Over plain
+  `http://localhost` it must be `false`, or the browser drops the cookie and
+  login fails.
 
 ## Secrets
 
-- Alle Secrets kommen ausschließlich aus Umgebungsvariablen (`.env`), nie
-  hartkodiert im Code.
-- `.env` ist in `.gitignore` ausgeschlossen; nur `.env.example` (ohne echte
-  Werte) wird versioniert.
-- Die Default-Werte in `.env.example` (`POSTGRES_PASSWORD=notebook`,
-  `MINIO_ROOT_PASSWORD=minio-password`) sind ausschließlich für lokale
-  Entwicklung gedacht und **müssen** vor jedem Produktivbetrieb geändert
-  werden.
+- Secrets come from environment variables (`.env`), not from code.
+- `.env` is git-ignored; `.env.example` holds placeholders only.
+- The defaults in `.env.example` (`POSTGRES_PASSWORD=notebook`,
+  `MINIO_ROOT_PASSWORD=minio-password`, `DEV_DEMO_USER_PASSWORD`) are for local
+  use and must be changed for any real deployment.
 
-## Datenzugriff / Mandantentrennung
+## Data access
 
-- Jede Notebook-Operation (Sources, Chat, Notes) prüft über
-  `assert_can_access()`, ob der angemeldete User Zugriff auf das
-  angefragte Notebook hat, bevor irgendeine Datenbank- oder
-  Qdrant-Operation ausgeführt wird.
-- Die Qdrant-Suche ist immer mit einem `notebook_id`-Filter versehen -
-  ein Chat in Notebook A kann strukturell keine Chunks aus Notebook B
-  zurückbekommen, selbst bei einem Bug in der Score-Heuristik.
-- MinIO-Objekte sind nie öffentlich lesbar; Downloads laufen ausschließlich
-  über zeitlich begrenzte signierte URLs.
+- Notebook operations (sources, chat, notes, studio) call `assert_can_access()`
+  before touching the database or Qdrant.
+- Every Qdrant search is filtered on `notebook_id`, so a chat in one notebook
+  cannot retrieve chunks from another one even if the ranking logic had a bug.
+- Citation validation checks that cited chunks and sources belong to the
+  notebook, see [rag-pipeline.md](rag-pipeline.md).
+- The MinIO bucket is created with anonymous access disabled. There is no
+  download endpoint for original files at the moment.
 
 ## Logging
 
-`apps/api/app/core/logging.py` / `apps/worker/app/core/logging.py`
-konfigurieren strukturiertes Logging. Es werden bewusst **keine**
-Dokumenteninhalte, Chat-Antworten oder Secrets geloggt - nur IDs, Status,
-Fehlermeldungen und technische Metadaten (Latenz, Modellname). Das
-`langdock_requests`-Audit-Tracking speichert ebenfalls nur Metadaten
-(Modell, Latenz, Tokenzahl), keine Prompt-/Antwortinhalte.
+`core/logging.py` (API and worker) configures structured logging. Document
+contents, chat answers and secrets are not logged, only ids, status, error
+messages and technical metadata such as latency and model name. The
+`langdock_requests` table stores metadata only.
 
-## Upload-Validierung
+## Upload validation
 
-- `apps/api/app/sources/upload.py` erlaubt ausschließlich eine feste Liste
-  an MIME-Types/Extensions (PDF, DOCX, TXT, Markdown, HTML, CSV, XLSX) und
-  validiert den tatsächlichen Dateiinhalt (nicht nur die vom Client
-  gesendete Content-Type-Angabe).
-- `MAX_UPLOAD_SIZE_MB` begrenzt die Dateigröße serverseitig, unabhängig vom
-  Frontend.
+- `sources/upload.py` allows a fixed set of file types (PDF, DOCX, TXT,
+  Markdown, HTML, CSV, XLSX). The type is derived from the file extension
+  first, then from the guessed MIME type, then from the content type the
+  client sent. The file content is not inspected (no magic-byte check); a file
+  that cannot be parsed ends up with status `failed`.
+- `MAX_UPLOAD_SIZE_MB` (default 50) is enforced on the server, and empty files
+  are rejected.
+- The upload is read into memory before the size check.
 
-## Bekannte Lücken (für Produktivbetrieb zu schließen)
+## Known gaps
 
-- Kein Audit-Log-Review-UI (die `audit_events`-Tabelle existiert im
-  Datenmodell, wird aber aktuell noch nicht befüllt).
-- Kein Passwort-Reset-Flow (E-Mail-Versand nicht implementiert) - ein
-  vergessenes Passwort erfordert aktuell einen manuellen DB-Eingriff.
-- Keine E-Mail-Verifizierung bei der Registrierung.
-- Kein Notebook-Sharing zwischen mehreren Usern (siehe Auth-Abschnitt oben).
-
-Rate-Limiting (Login und Register, Redis-Fixed-Window) und CSRF-Schutz
-(Double-Submit-Cookie) sind seit der Session-Auth-Migration umgesetzt, siehe
-Abschnitte oben.
+- No password reset and no e-mail verification. A forgotten password needs a
+  manual database change.
+- No notebook sharing.
+- `audit_events` exists as a table but is never written.
+- The CSRF token comparison is a plain string comparison, not constant-time.
+- Rate limiting keys on the peer IP, see above.
+- No security headers on the API itself; Caddy sets `X-Content-Type-Options`,
+  `X-Frame-Options` and `Referrer-Policy` in the local Caddyfile.
